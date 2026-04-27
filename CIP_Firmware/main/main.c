@@ -1,4 +1,5 @@
 #include <stdio.h>
+static const char *TAG = "MAIN";
 
 //ESP32 Headers
 #include "driver/gpio.h"
@@ -14,17 +15,15 @@
 //Motor Control Headers
 #include "stepperMotor.h"
 
+
+
 //G-code Headers
 #include "GCodeParser.h"
 char *tempFile = "main\\sample.gcode";
 
-static const char *TAG = "MAIN";
-
-
 //Included to host files on esp32 memory for testing purposes, will be removed when SD card is implemented
 #include "esp_spiffs.h"
 char *spiffs_file = "/spiffs/sample.gcode";
-
 
 /*
 List of Tasks
@@ -60,48 +59,53 @@ void HeaterControl(void *pvParameters)
 void StepperTestTask(void *pvParameters)
 {
     ESP_LOGI(TAG, "Starting stepper motor test...");
-    
     // Test pattern: oscillate each motor with increasing frequency
-    uint32_t test_frequencies[] = {100, 500, 1000, 2000};  // Hz
-    int freq_index = 0;
-
     while(1)
     {
-        // Cycle through different frequencies
-        uint32_t freq = test_frequencies[freq_index];
-        
-        ESP_LOGI(TAG, "Testing motors at %lu Hz", freq);
-        
         // Start all motors
-        stepper_set_frequency(MOTOR_X, freq);
-        stepper_set_frequency(MOTOR_Y, freq);
-        stepper_set_frequency(MOTOR_Z, freq);
-        stepper_set_frequency(MOTOR_E, freq);
-        
+        stepper_set_frequency(MOTOR_X, 100);
+        stepper_set_frequency(MOTOR_Y, 500);
+        stepper_set_frequency(MOTOR_Z, 1000);
+        stepper_set_frequency(MOTOR_E, 2000);
         // Run for 5 seconds at this frequency
         vTaskDelay(5000 / portTICK_PERIOD_MS);
-        
-        // Stop all motors
         stepper_set_frequency(MOTOR_X, 0);
         stepper_set_frequency(MOTOR_Y, 0);
         stepper_set_frequency(MOTOR_Z, 0);
         stepper_set_frequency(MOTOR_E, 0);
-        
-        ESP_LOGI(TAG, "Stopping motors for 2 seconds...");
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-        
-        // Move to next frequency
-        freq_index = (freq_index + 1) % 4;
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+
     }
 }
 
-void parserTask(void *pvParameters)
-{
-    ESP_LOGI(TAG, "Starting G-code parser task...");
-    parse(spiffs_file);
-    ESP_LOGI(TAG, "G-code parsing completed");
-    vTaskDelete(NULL); // Delete task after parsing is done
-}
+// void parserTask(void *pvParameters)
+// {
+//     ESP_LOGI(TAG, "Starting G-code parser task...");
+//     parse(spiffs_file);
+//     ESP_LOGI(TAG, "G-code parsing completed");
+//     vTaskDelete(NULL); // Delete task after parsing is done
+// }
+
+
+// void PinTestTask(void *pvParameters)
+// {
+//     uint8_t state = 0;
+//     while(1)
+//     {
+//         // Toggle all step pins
+//         gpio_set_level(X_STEP, state);
+//         gpio_set_level(Y_STEP, state);
+//         gpio_set_level(Z_STEP, state);
+//         gpio_set_level(EXTRUDER_STEP, state);
+//         gpio_set_level(X_DIR, state);
+//         gpio_set_level(Y_DIR, state);
+//         gpio_set_level(Z_DIR, state);
+//         gpio_set_level(EXTRUDER_DIR, state);
+//         ESP_LOGI(TAG, "Toggled step and direction pins to state: %d", state);
+//         state = !state; // Toggle state
+//         vTaskDelay(500 / portTICK_PERIOD_MS); // Delay for 1 second
+//     }
+// }
 
 void app_main(void)
 {
@@ -122,13 +126,31 @@ void app_main(void)
     }
     ESP_LOGI(TAG, "SPIFFS mounted successfully");
 
+    //Setting Pin Directions
+    ESP_LOGI(TAG, "Configuring GPIO pins...");
+    ESP_LOGI(TAG, "Configuring Output pins...");
+    // Configure stepper direction pins as outputs
+    gpio_config_t outputPins = {
+        .pin_bit_mask = (1ULL << X_DIR) | (1ULL << Y_DIR) | (1ULL << Z_DIR) | (1ULL << EXTRUDER_DIR) |
+                        (1ULL << X_STEP)| (1ULL << Y_STEP)| (1ULL << Z_STEP)| (1ULL << EXTRUDER_STEP),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+
+    gpio_config(&outputPins);
+    
+    //ESP_ERROR_CHECK(gpio_config(&outputPins));
+
+
 
     // Initialize stepper motors
     if (stepper_motor_init() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize stepper motors!");
         return;
     }
-    
+
     // Create heater control task
     xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
     
@@ -136,7 +158,9 @@ void app_main(void)
     xTaskCreate(StepperTestTask, "StepperTest", 2048, NULL, 2, NULL);
 
     // Create G-code parser task
-    xTaskCreate(parserTask, "GCodeParser", 2048, NULL, 3, NULL);
+    //xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
+
+    //xTaskCreate(PinTestTask, "PinTest", 2048, NULL, 4, NULL);
     
     ESP_LOGI(TAG, "All tasks created successfully");
 }

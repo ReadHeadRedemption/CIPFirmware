@@ -7,6 +7,11 @@
 
 void parse(char *fileLocation);
 
-
+typedef enum {
+    X = 0,
+    Y = 1,
+    Z = 2,
+    E = 3
+} coordinate_t;
 
 #endif

@@ -4,7 +4,7 @@
     "interface/ftdi/esp_ftdi.cfg",
     "target/esp32.cfg"
   ],
-  "idf.portWin": "COM4",
+  "idf.portWin": "COM3",
   "idf.currentSetup": "C:\\esp\\v5.5.4\\esp-idf",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32"
@@ -13,7 +13,7 @@
   "clangd.arguments": [
     "--background-index",
     "--query-driver=**",
-    "--compile-commands-dir=c:\\Users\\ethan\\Documents\\GitHub\\CIPFirmware\\CIP_Firmware\\build"
+    "--compile-commands-dir=c:\\Users\\ethan\\Documents\\GitHub\\CIPFirmware\\test\\sample_project\\build"
   ],
   "idf.flashType": "UART"
 }

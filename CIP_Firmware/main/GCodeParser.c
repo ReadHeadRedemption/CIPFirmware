@@ -22,8 +22,12 @@ void parse(char *fileLocation){
         ESP_LOGI(TAG, "Successfully opened G-code file: %s", fileLocation);
         while (fgets(line, sizeof(line), file)) {
             // Parse the line for command and coordinates
-            sscanf(line, "%s X%lf Y%lf Z%lf E%lf", cmd, &cords[0], &cords[1], &cords[2], &cords[3]);
-            ESP_LOGI(TAG, "Parsed Line: Command=%s, X=%lf, Y=%lf, Z=%lf, E=%lf", cmd, cords[0], cords[1], cords[2], cords[3]);
+            sscanf(line, "%s X%lf Y%lf Z%lf E%lf", cmd, &cords[X], &cords[Y], &cords[Z], &cords[E]);
+            
+            //if (cords[E] == 0){
+            //    sscanf(line, "F%lf", &cords[E]);
+            //}
+            ESP_LOGI(TAG, "Parsed Line: Command=%s, X=%lf, Y=%lf, Z=%lf, E=%lf", cmd, cords[X], cords[Y], cords[Z], cords[E]);
             // Here you would add logic to handle the command and move the motors accordingly
 
         }
