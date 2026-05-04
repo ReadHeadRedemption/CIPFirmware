@@ -11,20 +11,20 @@ static mcpwm_cmpr_handle_t comparators[NUM_MOTORS] = {NULL};
 // Motor configurations
 static motor_config_t motors[NUM_MOTORS] = {
     // X Motor: MCPWM Generator 0 (PWM0)
-    {X_STEP, X_DIR, 0, NULL},
+    {xStep, xDir, 0, NULL},
     // Y Motor: MCPWM Generator 1 (PWM1)
-    {Y_STEP, Y_DIR, 0, NULL},
+    {yStep, yDir, 0, NULL},
     // Z Motor: MCPWM Generator 2 (PWM2)
-    {Z_STEP, Z_DIR, 0, NULL},
+    {zStep, zDir, 0, NULL},
     // E Motor: MCPWM Generator 0B (PWM0B)
-    {EXTRUDER_STEP, EXTRUDER_DIR, 0, NULL},
+    {eStep, eDir, 0, NULL},
 };
 
 esp_err_t stepper_motor_init(void)
 {
     ESP_LOGI(TAG, "Initializing stepper motors...");
     esp_err_t err = ESP_OK;
-    uint32_t step_pins[] = {X_STEP, Y_STEP, Z_STEP, EXTRUDER_STEP};
+    uint32_t step_pins[] = {xStep, yStep, zStep, eStep};
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     for (int i = 0; i < NUM_MOTORS; i++) {
@@ -177,4 +177,43 @@ esp_err_t stepper_enable(motor_id_t motor_id, uint8_t enable)
         // Disable by setting frequency to 0
         return stepper_set_frequency(motor_id, 0);
     }
+}
+
+
+// Moveing Stepper Motors 
+// Move to absolute position in mm
+
+esp_err_t stepper_move_to(motor_id_t motor_id, float distance)
+{
+    if (motor_id >= NUM_MOTORS) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Calculate target steps based on position_mm and steps/mm for the axis
+    uint32_t target_steps = 0;
+    switch (motor_id) {
+        case MOTOR_X:
+            target_steps = (uint32_t)(distance * stepPerMM_X);
+            break;
+        case MOTOR_Y:
+            target_steps = (uint32_t)(distance * stepPerMM_Y);
+            break;
+        case MOTOR_Z:
+            target_steps = (uint32_t)(distance * stepPerMM_Z);
+            break;
+        case MOTOR_E:
+            target_steps = (uint32_t)(distance * stepPerMM_E);
+            break;
+        default:
+            return ESP_ERR_INVALID_ARG;
+    }
+
+    // For simplicity, we will just set a fixed frequency and let the motor run until it reaches the target steps
+    // In a real implementation, you would want to implement acceleration profiles and precise timing to stop at the exact position
+    stepper_set_frequency(motor_id, globalFrequency); // Set a default speed of 100 Hz
+
+    // Here you would add code to monitor the number of steps taken and stop the motor when it reaches target_steps
+    // This could be done using an interrupt or a timer to count steps based on the MCPWM signals
+
+    return ESP_OK;
 }

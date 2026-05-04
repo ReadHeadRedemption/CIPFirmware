@@ -6,6 +6,13 @@
 #include "driver/gpio.h"
 #include "pins.h"
 
+#define globalFrequency 1000 // Global frequency for all motors (can be adjusted per motor if needed)
+
+#define stepPerMM_X 0.01 // 100 steps/mm for X axis
+#define stepPerMM_Y 0.01 // 100 steps/mm for Y axis
+#define stepPerMM_Z 0.0025 // 400 steps/mm for Z axis
+#define stepPerMM_E 0.005 // 200 steps/mm for Extruder axis
+
 // Motor identifiers
 typedef enum {
     MOTOR_X = 0,
