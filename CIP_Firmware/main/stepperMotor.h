@@ -5,13 +5,13 @@
 #include "driver/mcpwm_prelude.h"
 #include "driver/gpio.h"
 #include "pins.h"
+#include <math.h>
 
-#define globalFrequency 1000 // Global frequency for all motors (can be adjusted per motor if needed)
 
-#define stepPerMM_X 0.01 // 100 steps/mm for X axis
-#define stepPerMM_Y 0.01 // 100 steps/mm for Y axis
-#define stepPerMM_Z 0.0025 // 400 steps/mm for Z axis
-#define stepPerMM_E 0.005 // 200 steps/mm for Extruder axis
+#define stepPerMM_X 100 // 100 steps/mm for X axis
+#define stepPerMM_Y 100 // 100 steps/mm for Y axis
+#define stepPerMM_Z 400 // 400 steps/mm for Z axis
+#define stepPerMM_E 200 // 200 steps/mm for Extruder axis
 
 // Motor identifiers
 typedef enum {
@@ -28,7 +28,22 @@ typedef struct {
     uint32_t dir_pin;
     uint32_t frequency_hz;    // Current frequency (steps/sec)
     mcpwm_gen_handle_t generator;  // MCPWM generator handle
+    
+    volatile uint32_t targetStep; // Total steps moved (for position tracking)
+    int32_t position; // Current position in steps
+    uint32_t enable_pin; // GPIO pin for enabling/disabling the motor
+    
+
 } motor_config_t;
+
+// Struct to define a multi-axis move command
+typedef struct {
+    float target_x;
+    float target_y;
+    float target_z;
+    uint32_t feed_rate_hz; // Max speed of the lead axis
+} MoveCmd_t;
+
 
 /**
  * @brief Initialize all stepper motors (MCPWM + GPIO)
@@ -57,5 +72,8 @@ esp_err_t stepper_set_direction(motor_id_t motor_id, uint8_t direction);
  * @param enable: 1 = enable, 0 = disable
  */
 esp_err_t stepper_enable(motor_id_t motor_id, uint8_t enable);
+
+esp_err_t stepper_start_move(motor_id_t motor_id, uint32_t steps, uint8_t direction, uint32_t start_freq);
+esp_err_t coordinated_move(MoveCmd_t move);
 
 #endif // STEPPER_MOTOR_H

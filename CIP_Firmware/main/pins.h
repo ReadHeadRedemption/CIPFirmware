@@ -15,6 +15,8 @@
 // #define CS_DISPLAY GPIO_NUM_17
 
 //Stepper Motor Pins
+#define tempEnable GPIO_NUM_2
+
 #define xStep GPIO_NUM_17
 #define xDir GPIO_NUM_16
 //#define xEnable GPIO_NUM_4
@@ -51,7 +53,7 @@
 
 // Misc
 #define StartButton GPIO_NUM_23
-#define TestButton GPIO_NUM_34
+#define TestButton GPIO_NUM_14
 
 
 /**

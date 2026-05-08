@@ -4,8 +4,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-void parse(char *fileLocation);
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
 
 typedef enum {
     X = 0,
@@ -13,5 +14,9 @@ typedef enum {
     Z = 2,
     E = 3
 } coordinate_t;
+
+void parse(char *fileLocation);
+
+
 
 #endif

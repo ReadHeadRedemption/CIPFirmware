@@ -1,42 +1,5 @@
-#include <stdio.h>
+#include "main.h"
 static const char *TAG = "MAIN";
-
-//ESP32 Headers
-#include "driver/gpio.h"
-#include "driver/adc.h"
-#include "esp_log.h"
-#include "pins.h"
-
-//Include RTOS Headers for real time management of the firmware
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
-
-//Motor Control Headers
-#include "stepperMotor.h"
-
-//G-code Headers
-#include "GCodeParser.h"
-char *tempFile = "main\\sample.gcode";
-
-//Included to host files on esp32 memory for testing purposes, 
-//will be removed when SD card is implemented
-#include "esp_spiffs.h"
-char *spiffs_file = "/spiffs/sample.gcode";
-
-// Global Variables
-// Semaphores
-SemaphoreHandle_t xSwitchSemaphore;
-SemaphoreHandle_t ySwitchSemaphore;
-SemaphoreHandle_t zSwitchSemaphore;
-SemaphoreHandle_t eSwitchSemaphore;
-SemaphoreHandle_t StartButtonSemaphore;
-
-// Position in mm for each axis
-float xPosition = 100;
-float yPosition = 100;
-float zPosition = 100;
-
 
 /*
 List of Tasks
@@ -56,6 +19,16 @@ Limit Switch Interrupts -- Homeing function
 
 */
 
+SemaphoreHandle_t xSwitchSemaphore = NULL;
+SemaphoreHandle_t ySwitchSemaphore = NULL;
+SemaphoreHandle_t zSwitchSemaphore = NULL;
+SemaphoreHandle_t eSwitchSemaphore = NULL;
+SemaphoreHandle_t StartButtonSemaphore = NULL;
+SemaphoreHandle_t TestButtonSemaphore = NULL;
+
+char *tempFile = "main\\sample.gcode";
+char *spiffs_file = "/spiffs/sample.gcode";
+
 // Task Lists
 void HeaterControl(void *pvParameters)
 {
@@ -68,59 +41,49 @@ void HeaterControl(void *pvParameters)
     }
 }
 
-void stepperHome(void *pvParameters)
+
+void parserTask(void *pvParameters)
 {
-    xSemaphoreTake(StartButtonSemaphore, portMAX_DELAY); // Wait for start button to be pressed
-    // Home X axis
-    ESP_LOGI(TAG, "Homing X axis...");
-    stepper_set_direction(MOTOR_X, 0); // Move towards limit switch
-    stepper_set_frequency(MOTOR_X, globalFrequency);
-    vTaskDelay(50 / portTICK_PERIOD_MS); // Prevent from sitting on button
-    stepper_set_direction(MOTOR_X, 1); // Move towards limit switch
-    stepper_set_frequency(MOTOR_X, globalFrequency);
-    xSemaphoreTake(xSwitchSemaphore, portMAX_DELAY); // Wait for X limit switch to trigger
-    stepper_set_frequency(MOTOR_X, 0); // Stop motor
-    xPosition = 0; // Reset position to 0 after homing
-    ESP_LOGI(TAG, "X axis homed successfully");
-    // Home Y axis
-    ESP_LOGI(TAG, "Homing Y axis...");
-    stepper_set_direction(MOTOR_Y, 1); // Move towards limit switch
-    stepper_set_frequency(MOTOR_Y, globalFrequency);
-    vTaskDelay(50 / portTICK_PERIOD_MS); // Prevent from sitting on button
-    stepper_set_direction(MOTOR_Y, 0);
-    stepper_set_frequency(MOTOR_Y, globalFrequency);
-    xSemaphoreTake(ySwitchSemaphore, portMAX_DELAY);
-    stepper_set_frequency(MOTOR_Y, 0);
-    yPosition = 0;
-    ESP_LOGI(TAG, "Y axis homed successfully");
-    // Home Z axis
-    ESP_LOGI(TAG, "Homing Z axis...");
-    stepper_set_direction(MOTOR_Z, 1); // Move towards limit switch
-    stepper_set_frequency(MOTOR_Z, globalFrequency);
-    vTaskDelay(50 / portTICK_PERIOD_MS); // Prevent from sitting on button
-    stepper_set_direction(MOTOR_Z, 0);
-    stepper_set_frequency(MOTOR_Z, globalFrequency);
-    xSemaphoreTake(zSwitchSemaphore, portMAX_DELAY);
-    stepper_set_frequency(MOTOR_Z, 0);
-    zPosition = 0;
-    ESP_LOGI(TAG, "Z axis homed successfully");
-    // Home Extruder axis (if needed)
-    ESP_LOGI(TAG, "Homing Extruder axis...");
-    stepper_set_direction(MOTOR_E, 1);
-    stepper_set_frequency(MOTOR_E, globalFrequency);
-    xSemaphoreTake(eSwitchSemaphore, portMAX_DELAY);
-    stepper_set_frequency(MOTOR_E, 0);
-    ESP_LOGI(TAG, "Extruder axis homed successfully");
-    vTaskDelete(NULL); // Delete task after homing is done
+    ESP_LOGI(TAG, "Starting G-code parser task...");
+    parse(spiffs_file);
+    ESP_LOGI(TAG, "G-code parsing completed");
+    vTaskDelete(NULL); // Delete task after parsing is done
 }
 
-// void parserTask(void *pvParameters)
-// {
-//     ESP_LOGI(TAG, "Starting G-code parser task...");
-//     parse(spiffs_file);
-//     ESP_LOGI(TAG, "G-code parsing completed");
-//     vTaskDelete(NULL); // Delete task after parsing is done
-// }
+//MiscFunctions
+void moveMotor(void *pvParameters)
+{
+    ESP_LOGI(TAG, "Starting motor test task...");
+    int state = 0;
+    while(1)
+    {
+        if(xSemaphoreTake(TestButtonSemaphore, portMAX_DELAY) == pdTRUE)
+        {
+            ESP_LOGI(TAG, "Test button pressed, moving motor...");
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+            // Wait for start button to be pressed   
+            stepper_set_direction(MOTOR_X, state); // Move towards limit switch
+            stepper_set_frequency(MOTOR_X, 1000); 
+            vTaskDelay(1000 / portTICK_PERIOD_MS); // Move for 1 second
+            // Moves the motor 1000*0.01
+            stepper_set_frequency(MOTOR_X, 0); // Stop motor
+            switch (state)
+            {
+            case 0:
+                state = 1;
+                break;
+            case 1:
+                state = 0;
+                break;
+            default:
+                break;
+            }
+            //xSemaphoreGive(TestButtonSemaphore); // Reset test button semaphore for next test
+        }
+    }
+
+}
+
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -161,6 +124,12 @@ void IRAM_ATTR StartButtonISRHandler(void *arg) {
     xSemaphoreGiveFromISR(StartButtonSemaphore, &xHigherPrioTaskWoken);
     portYIELD_FROM_ISR(xHigherPrioTaskWoken);
 }
+void IRAM_ATTR TestButtonISRHandler(void *arg) {
+    ESP_LOGV(TAG,"Test Button Triggered \n");
+    BaseType_t xHigherPrioTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(TestButtonSemaphore, &xHigherPrioTaskWoken);
+    portYIELD_FROM_ISR(xHigherPrioTaskWoken);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -193,6 +162,7 @@ void app_main(void)
     zSwitchSemaphore = xSemaphoreCreateBinary();
     eSwitchSemaphore = xSemaphoreCreateBinary();
     StartButtonSemaphore = xSemaphoreCreateBinary();
+    TestButtonSemaphore = xSemaphoreCreateBinary();
 
     ///////////////////////////////////////////////////////////////////////////////
     //
@@ -218,7 +188,8 @@ void app_main(void)
     ESP_LOGI(TAG, "Configuring Input pins...");
     gpio_config_t inputPins = {
         .pin_bit_mask = (1ULL << xSwitch) | (1ULL << ySwitch) | 
-                        (1ULL << zSwitch) | (1ULL << eSwitch) | (1ULL << StartButton),
+                        (1ULL << zSwitch) | (1ULL << eSwitch) | 
+                        (1ULL << StartButton) | (1ULL << TestButton),
         .mode = GPIO_MODE_INPUT,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .pull_up_en = GPIO_PULLUP_ENABLE,
@@ -238,6 +209,10 @@ void app_main(void)
     gpio_isr_handler_add(eSwitch, eISRHandler, NULL);
     gpio_set_intr_type(StartButton, GPIO_INTR_NEGEDGE);
     gpio_isr_handler_add(StartButton, StartButtonISRHandler, NULL);
+    gpio_set_intr_type(TestButton, GPIO_INTR_NEGEDGE);
+    gpio_isr_handler_add(TestButton, TestButtonISRHandler, NULL);
+
+    ESP_LOGI(TAG, "GPIO interrupts configured successfully");
 
     //ESP_ERROR_CHECK(gpio_config(&outputPins));
 
@@ -251,12 +226,13 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to initialize stepper motors!");
         return;
     }
-    xTaskCreate(stepperHome, "StepperHome", 2048, NULL, 1, NULL);
+    xTaskCreate(moveMotor, "MoveMotor", 2048, NULL, 2, NULL);
     
     // Create heater control task
     xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
 
     // Create G-code parser task
-    //xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
+    
+    xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
     ESP_LOGI(TAG, "All tasks created successfully");
 }
