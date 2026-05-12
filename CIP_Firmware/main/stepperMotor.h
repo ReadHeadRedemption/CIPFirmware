@@ -74,6 +74,6 @@ esp_err_t stepper_set_direction(motor_id_t motor_id, uint8_t direction);
 esp_err_t stepper_enable(motor_id_t motor_id, uint8_t enable);
 
 esp_err_t stepper_start_move(motor_id_t motor_id, uint32_t steps, uint8_t direction, uint32_t start_freq);
-esp_err_t coordinated_move(MoveCmd_t move);
+esp_err_t coordinated_move(MoveCmd_t * move);
 
 #endif // STEPPER_MOTOR_H

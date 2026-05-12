@@ -54,38 +54,54 @@ void parserTask(void *pvParameters)
 void moveMotor(void *pvParameters)
 {
     ESP_LOGI(TAG, "Starting motor test task...");
-    int state = 0;
+    MoveCmd_t moveTo; 
+    moveTo.target_x = 0.0f;
+    moveTo.target_y = 0.0f;
+    moveTo.target_z= 0.0f;
+    moveTo.feed_rate_hz = 5000.0;
     while(1)
     {
         if(xSemaphoreTake(TestButtonSemaphore, portMAX_DELAY) == pdTRUE)
         {
-            ESP_LOGI(TAG, "Test button pressed, moving motor...");
-            vTaskDelay(500 / portTICK_PERIOD_MS);
-            // Wait for start button to be pressed   
-            stepper_set_direction(MOTOR_X, state); // Move towards limit switch
-            stepper_set_frequency(MOTOR_X, 1000); 
-            vTaskDelay(1000 / portTICK_PERIOD_MS); // Move for 1 second
-            // Moves the motor 1000*0.01
-            stepper_set_frequency(MOTOR_X, 0); // Stop motor
-            switch (state)
-            {
-            case 0:
-                state = 1;
-                break;
-            case 1:
-                state = 0;
-                break;
-            default:
-                break;
-            }
-            //xSemaphoreGive(TestButtonSemaphore); // Reset test button semaphore for next test
+            ESP_LOGI(TAG, "Test button pressed, incrementing motor");
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            moveTo.target_x += 1.0;
+            moveTo.target_y += 1.0;
+            moveTo.target_z += 1.0;
+            ESP_LOGI(TAG, "moving motor...");
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            coordinated_move(&moveTo);
+            // Reset test button semaphore for next test
         }
     }
-
 }
 
-
-
+void buttonTest(void *pvParameters)
+{
+    while(1)
+    {
+        if(xSemaphoreTake(TestButtonSemaphore, pdMS_TO_TICKS(10)) == pdTRUE)
+        {
+            ESP_LOGI(TAG, "Test Button Pressed");
+        }
+        if(xSemaphoreTake(StartButtonSemaphore, pdMS_TO_TICKS(10)) == pdTRUE)
+        {
+            ESP_LOGI(TAG, "Start Button Pressed");
+        }
+        if(xSemaphoreTake(xSwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE)
+        {
+            ESP_LOGI(TAG, "X Switch Pressed");
+        }
+        if(xSemaphoreTake(ySwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE)
+        {
+            ESP_LOGI(TAG, "Y Switch Pressed");
+        }
+        if(xSemaphoreTake(zSwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE)
+        {
+            ESP_LOGI(TAG, "Z Switch Pressed");
+        }
+    }
+}
 ///////////////////////////////////////////////////////////////////////////////
 //
 //                          INTERRUPT HANDLES
@@ -226,13 +242,13 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to initialize stepper motors!");
         return;
     }
-    xTaskCreate(moveMotor, "MoveMotor", 2048, NULL, 2, NULL);
-    
+    xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
+    //xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
     // Create heater control task
-    xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
+    //xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
 
     // Create G-code parser task
-    
-    xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
+    //xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
+
     ESP_LOGI(TAG, "All tasks created successfully");
 }

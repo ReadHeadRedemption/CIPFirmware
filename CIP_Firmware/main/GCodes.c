@@ -33,7 +33,7 @@ void G1(float x, float y, float z, float e) // move to a position
     target.target_x = x;
     target.target_y = y;
     target.target_z = z;
-    coordinated_move(target);
+    coordinated_move(&target);
 }
 
 void G21() // set length mm

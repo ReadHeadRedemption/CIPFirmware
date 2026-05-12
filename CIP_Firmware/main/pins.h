@@ -29,16 +29,20 @@
 #define zDir GPIO_NUM_19
 //#define zEnable GPIO_NUM_6
 
-#define eStep GPIO_NUM_25
-#define eDir GPIO_NUM_26
+#define eStep GPIO_NUM_33
+#define eDir GPIO_NUM_32
 //#define eEnable GPIO_NUM_7
 // //Heater Pins
 
 
 // // Limit Switch Pins
-#define xSwitch GPIO_NUM_15
-#define ySwitch GPIO_NUM_22
-#define zSwitch GPIO_NUM_4
+// #define xSwitch GPIO_NUM_15
+// #define ySwitch GPIO_NUM_2
+// #define zSwitch GPIO_NUM_4
+
+#define xSwitch GPIO_NUM_12
+#define ySwitch GPIO_NUM_14
+#define zSwitch GPIO_NUM_27
 #define eSwitch GPIO_NUM_13
 
 // // SD Card Pins
@@ -52,8 +56,9 @@
 // #define RPI_UART_RX GPIO_NUM_3   // UART0 RX
 
 // Misc
-#define StartButton GPIO_NUM_23
-#define TestButton GPIO_NUM_14
+#define StartButton GPIO_NUM_26
+#define TestButton GPIO_NUM_25
+#define EStop GPIO_NUM_13
 
 
 /**
