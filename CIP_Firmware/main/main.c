@@ -58,16 +58,16 @@ void moveMotor(void *pvParameters)
     moveTo.target_x = 0.0f;
     moveTo.target_y = 0.0f;
     moveTo.target_z= 0.0f;
-    moveTo.feed_rate_hz = 5000.0;
+    moveTo.feed_rate_hz = 10000.0;
     while(1)
     {
         if(xSemaphoreTake(TestButtonSemaphore, portMAX_DELAY) == pdTRUE)
         {
             ESP_LOGI(TAG, "Test button pressed, incrementing motor");
             vTaskDelay(pdMS_TO_TICKS(1000));
-            moveTo.target_x = 10.0f;
-            moveTo.target_y = 10.0f;
-            moveTo.target_z = 10.0f;
+            moveTo.target_x += 20.0f;
+            moveTo.target_y += 20.0f;
+            moveTo.target_z += 20.0f;
             ESP_LOGI(TAG, "moving motor...");
             vTaskDelay(pdMS_TO_TICKS(1000));
             coordinated_move(&moveTo);
