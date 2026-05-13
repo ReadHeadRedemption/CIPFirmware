@@ -3,13 +3,13 @@
 
 static const char *TAG = "STEPPER";
 
+static portMUX_TYPE stepperMux = portMUX_INITIALIZER_UNLOCKED;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 //                MOTOR INITIALIZATION
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // MCPWM handles
 static mcpwm_timer_handle_t timer[NUM_MOTORS] = {NULL}; 
 static mcpwm_oper_handle_t op[NUM_MOTORS] = {NULL};  
@@ -31,13 +31,16 @@ static motor_config_t motors[NUM_MOTORS] = {
 // Interrupt for step counter
 // ISR Callback: Fires every time the MCPWM timer hits 0 (pulse starts)
 static bool IRAM_ATTR mcpwm_timer_empty_cb(mcpwm_timer_handle_t timer, const mcpwm_timer_event_data_t *edata, void *user_ctx) {
-    // We pass the loop index 'i' as the user_ctx so we know which motor fired
     int motor_id = (int)(intptr_t)user_ctx; 
     
-    // Increment the step counter
-    motors[motor_id].targetStep--;
-    
-    // Return false (return true only if you are waking a higher-priority FreeRTOS task here)
+    if (motors[motor_id].targetStep > 0) {
+        motors[motor_id].targetStep--;
+        
+        // If we just hit the final step, instantly cut the PWM signal
+        if (motors[motor_id].targetStep == 0) {
+            mcpwm_generator_set_force_level(motors[motor_id].generator, 0, true);
+        }
+    }
     return false; 
 }
 
@@ -143,49 +146,39 @@ esp_err_t stepper_motor_init(void)
 
 esp_err_t stepper_set_frequency(motor_id_t motor_id, uint32_t frequency_hz)
 {   
-    ESP_LOGI(TAG, "Stepper motor %d: Setting frequency to %lu Hz", motor_id, frequency_hz);
     if (motor_id >= NUM_MOTORS || timer[motor_id] == NULL || comparators[motor_id] == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     esp_err_t err = ESP_OK;
-    //ESP_LOGI(TAG, "Test point 1");
+
     if (frequency_hz == 0) {
-        //ESP_LOGI(TAG, "Test point 2");
-        // Disable by setting compare value to 0
-        err = mcpwm_comparator_set_compare_value(comparators[motor_id], 0);
+        // Force output low to stop immediately
+        err = mcpwm_generator_set_force_level(motors[motor_id].generator, 0, true);
+        motors[motor_id].frequency_hz = 0;
         ESP_LOGD(TAG, "Motor %d stopped", motor_id);
     } else {
-        ESP_LOGD(TAG, "Motor %d started", motor_id);
-        // Calculate compare value for 50% duty cycle
-        // period_ticks = 1MHz / frequency_hz
-        uint32_t period_ticks = 1000000 / frequency_hz;
-        
-        // Clamp to reasonable values
-        if (period_ticks < 10) {
-            period_ticks = 10;  // Minimum 100 kHz
-        }
-        if (period_ticks > 50000) {
-            period_ticks = 50000;  // Maximum 20 Hz
-        }
+        // Release the forced low state if it was stopped
+        mcpwm_generator_set_force_level(motors[motor_id].generator, -1, true); 
 
-        // Update timer period using mcpwm_timer_set_period
-        err = mcpwm_timer_set_period(timer[motor_id], period_ticks);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to set timer period: %s", esp_err_to_name(err));
-            return err;
-        }
-        //ESP_LOGI(TAG, "Test point 3");
-        // Set compare value to 50% duty cycle
-        uint32_t compare_value = period_ticks / 2;
-        err = mcpwm_comparator_set_compare_value(comparators[motor_id], compare_value);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to set compare value: %s", esp_err_to_name(err));
-            return err;
-        }
+        // CRITICAL FIX: Only update the hardware registers if the frequency actually changed.
+        // Constantly updating the period resets the timer and prevents slow pulses from firing.
+        if (motors[motor_id].frequency_hz != frequency_hz) {
+            uint32_t period_ticks = 1000000 / frequency_hz;
+            
+            // Clamp to reasonable values (100kHz max, 20Hz min)
+            if (period_ticks < 10) period_ticks = 10;  
+            if (period_ticks > 50000) period_ticks = 50000;
 
-        motors[motor_id].frequency_hz = frequency_hz;
-        ESP_LOGI(TAG, "Motor %d frequency set to %lu Hz", motor_id, frequency_hz);
+            err = mcpwm_timer_set_period(timer[motor_id], period_ticks);
+            if (err != ESP_OK) return err;
+
+            err = mcpwm_comparator_set_compare_value(comparators[motor_id], period_ticks / 2);
+            if (err != ESP_OK) return err;
+
+            motors[motor_id].frequency_hz = frequency_hz;
+            ESP_LOGI(TAG, "Motor %d frequency set to %lu Hz", motor_id, frequency_hz);
+        }
     }
     return err;
 }
@@ -223,23 +216,9 @@ esp_err_t stepper_enable(motor_id_t motor_id, uint8_t enable)
 //                MOTOR MOVEMENT FUNCTIONS
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Non-blocking: Starts the motor instantly at the starting frequency
-// esp_err_t stepper_start_move(motor_id_t motor_id, uint32_t steps, uint8_t direction, uint32_t start_freq)
-// {
-//     if (motor_id >= NUM_MOTORS) return ESP_ERR_INVALID_ARG;
-
-//     stepper_set_direction(motor_id, direction);
-//     motors[motor_id].targetStep = steps;
-    
-//     // Start at a low frequency (e.g., 500Hz)
-//     stepper_set_frequency(motor_id, start_freq); 
-    
-//     return ESP_OK;
-// }
-
 
 // Move to absolute position in mm
-float StepPerMM[] = {100.0f, 100.0f, 400.0f, 200.0f};
+float StepPerMM[] = {xStepsPerMM, yStepsPerMM, zStepsPerMM, eStepsPerMM};
 
 esp_err_t coordinated_move(MoveCmd_t * move)
 {
@@ -259,7 +238,7 @@ esp_err_t coordinated_move(MoveCmd_t * move)
     if (steps_y > max_steps) max_steps = steps_y;
     if (steps_z > max_steps) max_steps = steps_z;
 
-    // 3. Pre-calculate ratios to avoid heavy float math in the loop
+    // 3. Pre-calculate ratios
     float ratio_x = (float)steps_x / max_steps;
     float ratio_y = (float)steps_y / max_steps;
     float ratio_z = (float)steps_z / max_steps;
@@ -269,17 +248,18 @@ esp_err_t coordinated_move(MoveCmd_t * move)
     stepper_set_direction(MOTOR_Y, (move->target_y >= motors[MOTOR_Y].position) ? 0 : 1);
     stepper_set_direction(MOTOR_Z, (move->target_z >= motors[MOTOR_Z].position) ? 0 : 1);
 
+    // Disable interrupts briefly while loading new volatile variables to prevent race conditions
+    portENTER_CRITICAL(&stepperMux);
     motors[MOTOR_X].targetStep = steps_x;
     motors[MOTOR_Y].targetStep = steps_y;
     motors[MOTOR_Z].targetStep = steps_z;
+    portEXIT_CRITICAL(&stepperMux);
 
-    // 5. Acceleration Profile Config
-    uint32_t min_freq = 200; // Lowered start freq to prevent initial stall
+    //5. Acceleration Profile Config
+    uint32_t min_freq = 200; 
     uint32_t current_speed = min_freq;
-    uint32_t accel_step = 80; // Frequency increase per loop iteration
+    uint32_t accel_step = 80; 
     
-    // Dynamic Deceleration: Start slowing down when 20% of steps remain, 
-    // or at least 200 steps (whichever is greater).
     uint32_t decel_threshold = (max_steps / 5 > 200) ? (max_steps / 5) : 200;
     if (decel_threshold > max_steps) decel_threshold = max_steps / 2;
 
@@ -301,12 +281,14 @@ esp_err_t coordinated_move(MoveCmd_t * move)
         } else {
             // Ramp Down
             if (current_speed > min_freq) {
-                current_speed -= (accel_step + 20); // Decelerate slightly faster than acceleration
+                current_speed -= (accel_step + 20); 
                 if (current_speed < min_freq) current_speed = min_freq;
             }
         }
 
-        // Apply speeds using pre-calculated ratios
+        // --- THE FIX: Use current_speed, not move->feed_rate_hz ---
+        
+        // Apply speeds. If the motor is out of steps, turn it off.
         if (motors[MOTOR_X].targetStep > 0) stepper_set_frequency(MOTOR_X, (uint32_t)(current_speed * ratio_x));
         else stepper_set_frequency(MOTOR_X, 0);
 
@@ -316,7 +298,6 @@ esp_err_t coordinated_move(MoveCmd_t * move)
         if (motors[MOTOR_Z].targetStep > 0) stepper_set_frequency(MOTOR_Z, (uint32_t)(current_speed * ratio_z));
         else stepper_set_frequency(MOTOR_Z, 0);
 
-        vTaskDelay(pdMS_TO_TICKS(10)); 
     }
 
     // 7. Finalize

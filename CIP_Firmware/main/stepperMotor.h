@@ -7,11 +7,14 @@
 #include "pins.h"
 #include <math.h>
 
+#define MicroStepping 32.0f
+#define MotorStepsPerRev (360.0f / 1.8f)
 
-#define stepPerMM_X 100 // 100 steps/mm for X axis
-#define stepPerMM_Y 100 // 100 steps/mm for Y axis
-#define stepPerMM_Z 400 // 400 steps/mm for Z axis
-#define stepPerMM_E 200 // 200 steps/mm for Extruder axis
+// Calculate steps per mm as compile-time constants
+#define xStepsPerMM  ((MotorStepsPerRev * MicroStepping) / (20.0f * 2.0f))   // 20 tooth gear w/ 2mm belt pitch
+#define yStepsPerMM  ((MotorStepsPerRev * MicroStepping) / (20.0f * 2.0f))
+#define zStepsPerMM  ((MotorStepsPerRev * MicroStepping) / 8.0f)             // 8mm shift per revolution
+#define eStepsPerMM  ((MotorStepsPerRev * MicroStepping) / 8.0f)
 
 // Motor identifiers
 typedef enum {

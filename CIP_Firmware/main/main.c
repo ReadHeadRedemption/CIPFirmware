@@ -65,12 +65,13 @@ void moveMotor(void *pvParameters)
         {
             ESP_LOGI(TAG, "Test button pressed, incrementing motor");
             vTaskDelay(pdMS_TO_TICKS(1000));
-            moveTo.target_x += 1.0;
-            moveTo.target_y += 1.0;
-            moveTo.target_z += 1.0;
+            moveTo.target_x = 10.0f;
+            moveTo.target_y = 10.0f;
+            moveTo.target_z = 10.0f;
             ESP_LOGI(TAG, "moving motor...");
             vTaskDelay(pdMS_TO_TICKS(1000));
             coordinated_move(&moveTo);
+            ESP_LOGI(TAG, "Finished Moving");
             // Reset test button semaphore for next test
         }
     }

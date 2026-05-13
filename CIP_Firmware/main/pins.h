@@ -17,16 +17,16 @@
 //Stepper Motor Pins
 #define tempEnable GPIO_NUM_2
 
-#define xStep GPIO_NUM_17
 #define xDir GPIO_NUM_16
+#define xStep GPIO_NUM_17
 //#define xEnable GPIO_NUM_4
 
-#define yStep GPIO_NUM_18
 #define yDir GPIO_NUM_5
+#define yStep GPIO_NUM_18
 //#define yEnable GPIO_NUM_5
 
-#define zStep GPIO_NUM_21
 #define zDir GPIO_NUM_19
+#define zStep GPIO_NUM_21
 //#define zEnable GPIO_NUM_6
 
 #define eStep GPIO_NUM_33
