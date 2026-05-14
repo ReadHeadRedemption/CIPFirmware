@@ -19,17 +19,14 @@ Limit Switch Interrupts -- Homeing function
 
 */
 
-SemaphoreHandle_t xSwitchSemaphore = NULL;
-SemaphoreHandle_t ySwitchSemaphore = NULL;
-SemaphoreHandle_t zSwitchSemaphore = NULL;
-SemaphoreHandle_t eSwitchSemaphore = NULL;
-SemaphoreHandle_t StartButtonSemaphore = NULL;
-SemaphoreHandle_t TestButtonSemaphore = NULL;
-
 char *tempFile = "main\\sample.gcode";
 char *spiffs_file = "/spiffs/sample.gcode";
 
-// Task Lists
+///////////////////////////////////////////////////////////////////////////////
+//
+//                          TASKS 
+//
+///////////////////////////////////////////////////////////////////////////////
 void HeaterControl(void *pvParameters)
 {
     while(1)
@@ -50,7 +47,11 @@ void parserTask(void *pvParameters)
     vTaskDelete(NULL); // Delete task after parsing is done
 }
 
-//MiscFunctions
+///////////////////////////////////////////////////////////////////////////////
+//
+//                          TEST TASKS
+//
+///////////////////////////////////////////////////////////////////////////////
 void moveMotor(void *pvParameters)
 {
     ESP_LOGI(TAG, "Starting motor test task...");
@@ -107,7 +108,7 @@ void buttonTest(void *pvParameters)
 //
 //                          INTERRUPT HANDLES
 //
-//////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 void IRAM_ATTR xISRHandler(void *arg) {
     ESP_LOGV(TAG,"X Limit Switch Triggered \n");
     BaseType_t xHigherPrioTaskWoken = pdFALSE;
@@ -243,13 +244,13 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to initialize stepper motors!");
         return;
     }
-    xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
+    //xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
     //xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
     // Create heater control task
     //xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
 
     // Create G-code parser task
-    //xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
+    xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
 
-    ESP_LOGI(TAG, "All tasks created successfully");
+    //ESP_LOGI(TAG, "All tasks created successfully");
 }

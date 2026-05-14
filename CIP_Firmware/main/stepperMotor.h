@@ -1,11 +1,10 @@
 #ifndef STEPPER_MOTOR_H
 #define STEPPER_MOTOR_H
 
-#include "esp_err.h"
 #include "driver/mcpwm_prelude.h"
-#include "driver/gpio.h"
+#include "common.h"
 #include "pins.h"
-#include <math.h>
+
 
 #define MicroStepping 32.0f
 #define MotorStepsPerRev (360.0f / 1.8f)
@@ -76,7 +75,15 @@ esp_err_t stepper_set_direction(motor_id_t motor_id, uint8_t direction);
  */
 esp_err_t stepper_enable(motor_id_t motor_id, uint8_t enable);
 
-esp_err_t stepper_start_move(motor_id_t motor_id, uint32_t steps, uint8_t direction, uint32_t start_freq);
+/**
+ * @brief Enable/disable motor output
+ * @param move: a stucture that contains the movement frequency and the target coordinates
+ */
 esp_err_t coordinated_move(MoveCmd_t * move);
+
+/**
+ * @brief Set motors to look for 0,0,0
+ */
+esp_err_t homeMotors();
 
 #endif // STEPPER_MOTOR_H

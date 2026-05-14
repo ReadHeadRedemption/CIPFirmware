@@ -15,6 +15,8 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
+#include "common.h"
+
 //Motor Control Headers
 #include "stepperMotor.h"
 
@@ -25,17 +27,5 @@
 //Included to host files on esp32 memory for testing purposes, 
 //will be removed when SD card is implemented
 #include "esp_spiffs.h"
-
-
-// Global Variables
-// Semaphores
-extern SemaphoreHandle_t xSwitchSemaphore;
-extern SemaphoreHandle_t ySwitchSemaphore;
-extern SemaphoreHandle_t zSwitchSemaphore;
-extern SemaphoreHandle_t eSwitchSemaphore;
-extern SemaphoreHandle_t StartButtonSemaphore;
-extern SemaphoreHandle_t TestButtonSemaphore;
-extern SemaphoreHandle_t parseSemaphore; 
-
 
 #endif

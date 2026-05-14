@@ -1,2 +1,2 @@
-idf_component_register(SRCS "GCodes.c" "stepperMotor.c" "main.c" "GCodeParser.c"
+idf_component_register(SRCS "common.c""stepperMotor.c" "main.c" "GCodeParser.c"
                     INCLUDE_DIRS ".")

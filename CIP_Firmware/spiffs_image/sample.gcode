@@ -1,82 +1,13 @@
-G92 X0 Y0 Z0 ; Set axis position
-G21 ; Set length units, millimeters
-G90 ; Set distance mode, absolute
-F500
-G0 Z10
+G21             ; units = mm
+G90             ; absolute coordinates
+G28             ; home all axes
+G1 Z5 F6000     ; safe travel height
+G0 X20 Y50
+G1 X20 Y50 ;F1200
+G1 X20 Y100 F1200
+G1 X20 Y75
+G1 X50 Y75 F1200
+G1 X50 Y100
+G1 X50 Y50
+; ---- end sequence ----
 G0 X0 Y0
-G1 Z-5
-G0 Z10
-G0 X0 Y10
-G1 Z-5
-G0 Z10
-G0 X0 Y20
-G1 Z-5
-G0 Z10
-G0 X0 Y30
-G1 Z-5
-G0 Z10
-G0 X0 Y40
-G1 Z-5
-G0 Z10
-G0 X10 Y0
-G1 Z-5
-G0 Z10
-G0 X10 Y10
-G1 Z-5
-G0 Z10
-G0 X10 Y20
-G1 Z-5
-G0 Z10
-G0 X10 Y30
-G1 Z-5
-G0 Z10
-G0 X10 Y40
-G1 Z-5
-G0 Z10
-G0 X20 Y0
-G1 Z-5
-G0 Z10
-G0 X20 Y10
-G1 Z-5
-G0 Z10
-G0 X20 Y20
-G1 Z-5
-G0 Z10
-G0 X20 Y30
-G1 Z-5
-G0 Z10
-G0 X20 Y40
-G1 Z-5
-G0 Z10
-G0 X30 Y0
-G1 Z-5
-G0 Z10
-G0 X30 Y10
-G1 Z-5
-G0 Z10
-G0 X30 Y20
-G1 Z-5
-G0 Z10
-G0 X30 Y30
-G1 Z-5
-G0 Z10
-G0 X30 Y40
-G1 Z-5
-G0 Z10
-G0 X40 Y0
-G1 Z-5
-G0 Z10
-G0 X40 Y10
-G1 Z-5
-G0 Z10
-G0 X40 Y20
-G1 Z-5
-G0 Z10
-G0 X40 Y30
-G1 Z-5
-G0 Z10
-G0 X40 Y40
-G1 Z-5
-G0 Z10
-G0 X0 Y0
-M02 ; End of program, no reset

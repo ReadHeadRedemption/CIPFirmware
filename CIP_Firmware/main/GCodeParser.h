@@ -7,6 +7,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "common.h"
+#include "stepperMotor.h"
+void parse(char *fileLocation);
 
 typedef enum {
     X = 0,
@@ -14,9 +17,6 @@ typedef enum {
     Z = 2,
     E = 3
 } coordinate_t;
-
-void parse(char *fileLocation);
-
 
 
 #endif

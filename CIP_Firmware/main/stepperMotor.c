@@ -112,6 +112,52 @@ esp_err_t stepper_set_direction(motor_id_t motor_id, uint8_t direction)
     return gpio_set_level(motors[motor_id].dir_pin, direction);
 }
 
+esp_err_t stepper_set_frequency(motor_id_t motor_id, uint32_t frequency)
+{
+    // 1. Safety check
+    if (motor_id >= NUM_MOTORS) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Update the internal state tracker
+    motors[motor_id].frequency_hz = frequency;
+
+    // 2. Stop the motor if frequency is 0
+    if (frequency == 0)
+    {
+        // In ESP-IDF v5, there is no generic "rmt_stop()" function. 
+        // The cleanest and safest way to immediately abort an ongoing, 
+        // infinitely-looping RMT transmission is to disable and re-enable the channel.
+        rmt_disable(motor_channels[motor_id]);
+        return rmt_enable(motor_channels[motor_id]);
+    }
+
+    // 3. Start continuous rotation
+    // Calculate how many 1MHz ticks make up half a wavelength
+    uint32_t ticks = 1000000 / (2 * frequency);
+
+    // Create a single RMT symbol for one full step pulse (50% duty cycle)
+    rmt_symbol_word_t symbol = {
+        .duration0 = (uint16_t)ticks,
+        .level0 = 1,
+        .duration1 = (uint16_t)ticks,
+        .level1 = 0
+    };
+
+    // Configure the transmission to loop this single symbol infinitely
+    rmt_transmit_config_t tx_config = {
+        .loop_count = -1, // -1 instructs the RMT hardware to loop forever
+    };
+
+    // Transmit using the copy encoder you set up in stepper_motor_init.
+    // Because it's a copy encoder, we pass the size in BYTES, not the number of symbols.
+    return rmt_transmit(motor_channels[motor_id], 
+                        motor_encoders[motor_id], 
+                        &symbol, 
+                        sizeof(rmt_symbol_word_t), 
+                        &tx_config);
+}
+
 // Note: In RMT, we usually transmit chunks.
 // For real-time frequency changes, we send small batches of steps.
 static esp_err_t rmt_step_burst(motor_id_t motor_id, uint32_t freq, uint32_t count)
@@ -129,12 +175,11 @@ static esp_err_t rmt_step_burst(motor_id_t motor_id, uint32_t freq, uint32_t cou
     return rmt_transmit(motor_channels[motor_id], motor_encoders[motor_id], &symbol, 1, &tx_config);
 }
 
-// -------------------------------------------------------------------------
-// COORDINATED MOVEMENT
-// -------------------------------------------------------------------------
+//move all motors to a organized point
 esp_err_t coordinated_move(MoveCmd_t *move)
 {
     float StepPerMM[] = {xStepsPerMM, yStepsPerMM, zStepsPerMM, eStepsPerMM};
+    float fudgeFactor[] = {1,1,1,1};
 
     // 1. Calculate steps
     float dx = move->target_x - motors[MOTOR_X].position;
@@ -142,9 +187,9 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     float dz = move->target_z - motors[MOTOR_Z].position;
 
     uint32_t steps[3] = {
-        (uint32_t)(fabs(dx) * StepPerMM[0]),
-        (uint32_t)(fabs(dy) * StepPerMM[1]),
-        (uint32_t)(fabs(dz) * StepPerMM[2])};
+        (uint32_t)(fabs(dx) * StepPerMM[0] * fudgeFactor[0]),
+        (uint32_t)(fabs(dy) * StepPerMM[1] * fudgeFactor[1]),
+        (uint32_t)(fabs(dz) * StepPerMM[2] * fudgeFactor[2])};
 
     uint32_t max_steps = 0;
     for (int i = 0; i < 3; i++)
@@ -225,5 +270,50 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     motors[MOTOR_Y].position = move->target_y;
     motors[MOTOR_Z].position = move->target_z;
 
+    return ESP_OK;
+}
+
+esp_err_t homeMotors()
+{
+     // Home X axis
+    ESP_LOGI(TAG, "Homing X axis...");
+    stepper_set_direction(MOTOR_X, 0); // Move towards limit switch
+    stepper_set_frequency(MOTOR_X, 1000); 
+    vTaskDelay(50 / portTICK_PERIOD_MS); // Prevent from sitting on button
+    stepper_set_direction(MOTOR_X, 1); // Move towards limit switch
+    stepper_set_frequency(MOTOR_X, 1000);
+    if(xSemaphoreTake(xSwitchSemaphore, portMAX_DELAY))
+    {
+        // Wait for X limit switch to trigger
+        stepper_set_frequency(MOTOR_X, 0); // Stop motor
+        motors[MOTOR_X].position = 0;
+        ESP_LOGI(TAG, "X axis homed successfully");
+    } 
+    // Home Y axis
+    ESP_LOGI(TAG, "Homing Y axis...");
+    stepper_set_direction(MOTOR_Y, 1); // Move towards limit switch
+    stepper_set_frequency(MOTOR_Y, 1000);
+    vTaskDelay(50 / portTICK_PERIOD_MS); // Prevent from sitting on button
+    stepper_set_direction(MOTOR_Y, 0);
+    stepper_set_frequency(MOTOR_Y, 1000);
+    if(xSemaphoreTake(ySwitchSemaphore, portMAX_DELAY))
+    {
+        stepper_set_frequency(MOTOR_Y, 0);
+        motors[MOTOR_Y].position = 0;
+        ESP_LOGI(TAG, "Y axis homed successfully");
+    }
+    // Home Z axis
+    ESP_LOGI(TAG, "Homing Z axis...");
+    stepper_set_direction(MOTOR_Z, 1); // Move towards limit switch
+    stepper_set_frequency(MOTOR_Z, 1000);
+    vTaskDelay(50 / portTICK_PERIOD_MS); // Prevent from sitting on button
+    stepper_set_direction(MOTOR_Z, 0);
+    stepper_set_frequency(MOTOR_Z, 1000);
+    if(xSemaphoreTake(zSwitchSemaphore, portMAX_DELAY))
+    {
+        stepper_set_frequency(MOTOR_Z, 0);
+        motors[MOTOR_Z].position = 0;
+        ESP_LOGI(TAG, "Z axis homed successfully");
+    }
     return ESP_OK;
 }
