@@ -41,10 +41,15 @@ void HeaterControl(void *pvParameters)
 
 void parserTask(void *pvParameters)
 {
-    ESP_LOGI(TAG, "Starting G-code parser task...");
-    parse(spiffs_file);
-    ESP_LOGI(TAG, "G-code parsing completed");
-    vTaskDelete(NULL); // Delete task after parsing is done
+    while(1)
+    {
+        if(xSemaphoreTake(StartButtonSemaphore, portMAX_DELAY) == pdTRUE)
+        {
+            ESP_LOGI(TAG, "Starting G-code parser task...");
+            parse(spiffs_file);
+            ESP_LOGI(TAG, "G-code parsing completed");
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -69,7 +74,8 @@ void moveMotor(void *pvParameters)
             moveTo.target_x += 20.0f;
             moveTo.target_y += 20.0f;
             moveTo.target_z += 20.0f;
-            ESP_LOGI(TAG, "moving motor...");
+
+            ESP_LOGI(TAG, "moving motor to X: %.3f Y: %.3f Z: %.3f", moveTo.target_x, moveTo.target_y, moveTo.target_z);
             vTaskDelay(pdMS_TO_TICKS(1000));
             coordinated_move(&moveTo);
             ESP_LOGI(TAG, "Finished Moving");

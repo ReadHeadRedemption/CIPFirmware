@@ -9,5 +9,4 @@ G1 X20 Y75
 G1 X50 Y75 F1200
 G1 X50 Y100
 G1 X50 Y50
-; ---- end sequence ----
 G0 X0 Y0

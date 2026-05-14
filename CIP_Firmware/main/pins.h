@@ -58,7 +58,7 @@
 // Misc
 #define StartButton GPIO_NUM_26
 #define TestButton GPIO_NUM_25
-#define EStop GPIO_NUM_13
+//#define EStop GPIO_NUM_13
 
 
 /**

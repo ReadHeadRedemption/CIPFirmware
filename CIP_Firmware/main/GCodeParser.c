@@ -66,10 +66,11 @@ void parse(char *fileLocation)
             if ((strcmp(cmd, "G0") == 0) && (xSemaphoreTake(parseSemaphore, portMAX_DELAY) == pdPASS))
             {
                 ESP_LOGI(TAG, "CALLING G0");
-                head.target_x = cords[X];
-                head.target_y = cords[Y];
-                head.target_z = cords[Z];
+                head.target_x = (float)cords[X];
+                head.target_y = (float)cords[Y];
+                head.target_z = (float)cords[Z];
                 head.feed_rate_hz = 1000;
+                ESP_LOGI(TAG, "LAST CORDS X: %.3f Y:%.3f Z:%.3f", lastCords[X], lastCords[Y], lastCords[Z]);
                 ESP_LOGI(TAG, "*G0* MOVING HEAD TO X: %.3f Y:%.3f Z:%.3f", head.target_x, head.target_y, head.target_z);
                 coordinated_move(&head);
                 for(int i = 0; i<3; i++) lastCords[i] = cords[i];
@@ -82,9 +83,10 @@ void parse(char *fileLocation)
                 ESP_LOGI(TAG, "CALLING G1");
                 if((cords[X] != lastCords[X]) || (cords[Y] != lastCords[Y]))
                 {
+                ESP_LOGI(TAG, "LAST CORDS X/Y X: %.3f Y:%.3f", lastCords[X], lastCords[Y]);
                 ESP_LOGI(TAG, "SETTING X/Y X: %.3f Y:%.3f", cords[X], cords[Y]);
-                head.target_x = cords[X];
-                head.target_y = cords[Y];
+                head.target_x = (float)cords[X];
+                head.target_y = (float)cords[Y];
                 head.feed_rate_hz = 1000;
                 // turn on extruder so need to calculate how much it extrudes
                 ESP_LOGI(TAG, "SETTING FREQUENCY");
@@ -95,13 +97,15 @@ void parse(char *fileLocation)
                 for(int i = 0; i<2; i++) lastCords[i] = cords[i];
                 }else if(cords[Z] != lastCords[Z])
                 {
-                stepper_set_frequency(E, 0);
-                ESP_LOGI(TAG, "SETTING Z: %.3f", cords[Z]);
-                head.target_z = cords[Z];
-                coordinated_move(&head);
-                lastCords[Z] = cords[Z];
-                ESP_LOGI(TAG, "FINISHED MOVING HEAD IN Z");
-                ESP_LOGI(TAG, "FINISHED G1");
+                    stepper_set_frequency(E, 0);
+                    ESP_LOGI(TAG, "LAST CORDS Z: %.3f", lastCords[Z]);
+                    ESP_LOGI(TAG, "SETTING Z: %.3f", cords[Z]);
+                    head.target_z = (float)cords[Z];
+                    head.feed_rate_hz = 1000;
+                    coordinated_move(&head);
+                    lastCords[Z] = cords[Z];
+                    ESP_LOGI(TAG, "FINISHED MOVING HEAD IN Z");
+                    ESP_LOGI(TAG, "FINISHED G1");
                 }
                 xSemaphoreGive(parseSemaphore);
             }

@@ -30,9 +30,8 @@ typedef struct {
     uint32_t dir_pin;
     uint32_t frequency_hz;    // Current frequency (steps/sec)
     mcpwm_gen_handle_t generator;  // MCPWM generator handle
-    
     volatile uint32_t targetStep; // Total steps moved (for position tracking)
-    int32_t position; // Current position in steps
+    float position; // Current position in mm
     uint32_t enable_pin; // GPIO pin for enabling/disabling the motor
     
 
