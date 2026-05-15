@@ -21,7 +21,6 @@
 #define xStep GPIO_NUM_17
 //#define xEnable GPIO_NUM_4
 
-// swap y/z once test board is fixed
 #define yDir GPIO_NUM_5
 #define yStep GPIO_NUM_18
 //#define yEnable GPIO_NUM_5
@@ -36,14 +35,14 @@
 // //Heater Pins
 
 
-// Limit Switch Pins
-#define xSwitch GPIO_NUM_4
-#define ySwitch GPIO_NUM_22
-#define zSwitch GPIO_NUM_23
+// // Limit Switch Pins
+// #define xSwitch GPIO_NUM_15
+// #define ySwitch GPIO_NUM_2
+// #define zSwitch GPIO_NUM_4
 
-// #define xSwitch GPIO_NUM_12
-// #define ySwitch GPIO_NUM_14
-// #define zSwitch GPIO_NUM_27
+#define xSwitch GPIO_NUM_12
+#define ySwitch GPIO_NUM_14
+#define zSwitch GPIO_NUM_27
 #define eSwitch GPIO_NUM_13
 
 // // SD Card Pins

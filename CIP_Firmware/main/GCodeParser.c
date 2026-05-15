@@ -4,24 +4,20 @@
 static const char *TAG = "GCODE_PARSER";
 
 // Temp file location to load into the esp32
+
 void parse(char *fileLocation)
 {
     FILE *file = fopen(fileLocation, "r");
     char line[128];
-    char *p;
     char cmd[4] = "";
     float cords[3] = {0.0f, 0.0f, 0.0f};
-
-    uint32_t feed = 0;
-    parseSemaphore = xSemaphoreCreateMutex();
-
-    float scale = 1.0;
-    bool distMode = true;
+    float lastCords[3] = {0.0f, 0.0f, 0.0f};
     MoveCmd_t head;
-    head.target_x = cords[X] * scale;
-    head.target_y = cords[Y] * scale;
-    head.target_z = cords[Z] * scale;
-    head.feed_rate_hz = 10000;
+    head.target_x = cords[X];
+    head.target_y = cords[Y];
+    head.target_z = cords[Z];
+    head.feed_rate_hz = 1000;
+    uint32_t feed = 0;
     parseSemaphore = xSemaphoreCreateMutex();
 
     if (file == NULL)
@@ -34,148 +30,113 @@ void parse(char *fileLocation)
         ESP_LOGI(TAG, "Successfully opened G-code file: %s", fileLocation);
         while (fgets(line, sizeof(line), file))
         {
-            float cords[3] = {0.0f, 0.0f, 0.0f};
-            bool coordChange[3] = {false, false, false};
-            // First parse the command
-            /*
-            Command Types
-            G
-            M
-            ; means comment
-            */
-            sscanf(line, "%4s", cmd);
-            ESP_LOGI(TAG, "COMMAND: %s", cmd);
-            ESP_LOGI(TAG, "TYPE: %c", cmd[0]);
-            if (strcmp(&cmd[0], ";") == 0 || strcmp(&cmd[0], " ") == 0) continue;
-            else if (cmd[0] == 'F')
+            // Parse the line for command and coordinates
+            // 1. Parse the command first (e.g., "G1", "G0", "M3")
+            // This stops parsing at the first space.
+            if (sscanf(line, "%15s", cmd) != 1)
             {
-                if ((p = strchr(line, 'F')) != NULL)
-                    {
-                        sscanf(p + 1, "%ld", &feed);
-                    }
-                head.feed_rate_hz = feed;
+                return; // Empty line
             }
-            else if (cmd[0] == 'G')
+            // 2. Search for each coordinate axis individually (Handling optional values)
+            char *p;
+
+            // Check X
+            if ((p = strchr(line, 'X')) != NULL)
             {
-                // start scaning for G type values
-                if ((strcmp(cmd, "G0") == 0) || // rapid movement
-                    strcmp(cmd, "G1") == 0)     // linear movement
-                {
-                    if ((p = strchr(line, 'X')) != NULL)
-                    {
-                        sscanf(p + 1, "%f", &cords[X]); // Use %f for float!
-                        coordChange[0] = true;
-                    }
-                    // Check Y
-                    if ((p = strchr(line, 'Y')) != NULL)
-                    {
-                        sscanf(p + 1, "%f", &cords[Y]);
-                        coordChange[1] = true;
-                    }
-                    // Check Z
-                    if ((p = strchr(line, 'Z')) != NULL)
-                    {
-                        coordChange[2] = true;
-                        sscanf(p + 1, "%f", &cords[Z]);
-                    }
-                    // Check F
-                    if ((p = strchr(line, 'F')) != NULL)
-                    {
-                        sscanf(p + 1, "%ld", &feed);
-                        head.feed_rate_hz = feed;
-
-                    }
-                    int g = atoi(cmd + 1);
-                    switch (g)
-                    {
-                    case 0: // rapid movement
-                        ESP_LOGI(TAG, "CALLING G0");
-                        if (distMode)
-                        {
-                            if(coordChange[0])head.target_x = cords[X] * scale;
-                            if(coordChange[1])head.target_y = cords[Y] * scale;
-                            if(coordChange[2])head.target_z = cords[Z] * scale;
-                        }
-                        else
-                        {
-                            if(coordChange[0])head.target_x += cords[X] * scale;
-                            if(coordChange[1])head.target_y += cords[Y] * scale;
-                            if(coordChange[2])head.target_z += cords[Z] * scale;
-                        }
-                        ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f", 
-                                    &head.target_x, &head.target_y, &head.target_z);
-                        coordinated_move(&head);
-                        break;
-                    case 1: // linear movement
-                        ESP_LOGI(TAG, "CALLING G1");
-                        if (distMode)
-                        {
-                            if(coordChange[0])head.target_x = cords[X] * scale;
-                            if(coordChange[1])head.target_y = cords[Y] * scale;
-                            if(coordChange[2])head.target_z = cords[Z] * scale;
-                        }
-                        else
-                        {
-                            if(coordChange[0])head.target_x += cords[X] * scale;
-                            if(coordChange[1])head.target_y += cords[Y] * scale;
-                            if(coordChange[2])head.target_z += cords[Z] * scale;
-                        }
-                        stepper_set_direction(MOTOR_E,1);
-                        stepper_set_frequency(MOTOR_E, feed);
-                        ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f", 
-                                    head.target_x, head.target_y, head.target_z);
-                        coordinated_move(&head);
-                        stepper_set_frequency(MOTOR_E,0);
-                        break;
-                    default:
-                        break;
-                    }
-                }
-                else if ((strcmp(cmd, "G2") == 0) || (strcmp(cmd, "G3") == 0))
-                {
-
-                }
-                else if (strcmp(cmd, "G4") == 0) // delay in seconds
-                {
-                    int delay = 0;
-                    if ((p = strchr(line, 'P')) != NULL)
-                    {
-                        sscanf(p + 1, "%d", &delay); // Use %f for float!
-                    }
-                    ESP_LOGI(TAG, "DELAY FOR %d SECONDS", delay);
-                    vTaskDelay(pdMS_TO_TICKS(delay*1000));
-                }
-                else if (strcmp(cmd, "G20") == 0) // Set Unit In
-                {
-                    ESP_LOGI(TAG, "CALLING G20");
-                    scale = 25.4;
-                }
-                else if (strcmp(cmd, "G21") == 0) // Set Unit MM
-                {
-                    ESP_LOGI(TAG, "CALLING G21");
-                    scale = 1;
-                }
-                else if (strcmp(cmd, "G28") == 0) // Home motors
-                {
-                    ESP_LOGI(TAG, "CALLING G28");
-                    homeMotors();
-                }
-                else if (strcmp(cmd, "G90") == 0) // Set Distance Mode Absolute
-                {
-                    distMode = true;
-                }
-                else if (strcmp(cmd, "G91") == 0) // Set Distance Mode Relative
-                {
-                    distMode = false;
-                }
+                sscanf(p + 1, "%f", &cords[X]); // Use %f for float!
             }
-            else if (strcmp(&cmd[0], "M") == 0)
+            // Check Y
+            if ((p = strchr(line, 'Y')) != NULL)
             {
+                sscanf(p + 1, "%f", &cords[Y]);
+            }
+            // Check Z
+            if ((p = strchr(line, 'Z')) != NULL)
+            {
+                sscanf(p + 1, "%f", &cords[Z]);
+            }
+            // Check E
+            if ((p = strchr(line, 'F')) != NULL)
+            {
+                sscanf(p + 1, "%ld", &feed);
+            }
+
+            // 3. Print the coordinates safely using %f for float representation
+            ESP_LOGI(TAG, "Parsed Line: Command=%s, X=%.3f, Y=%.3f, Z=%.3f, F=%ld", cmd, cords[X], cords[Y], cords[Z], feed);
+            if ((strcmp(cmd, "G0") == 0) && (xSemaphoreTake(parseSemaphore, portMAX_DELAY) == pdPASS))
+            {
+                ESP_LOGI(TAG, "CALLING G0");
+                head.target_x = (float)cords[X];
+                head.target_y = (float)cords[Y];
+                head.target_z = (float)cords[Z];
+                head.feed_rate_hz = 1000;
+                ESP_LOGI(TAG, "LAST CORDS X: %.3f Y:%.3f Z:%.3f", lastCords[X], lastCords[Y], lastCords[Z]);
+                ESP_LOGI(TAG, "*G0* MOVING HEAD TO X: %.3f Y:%.3f Z:%.3f", head.target_x, head.target_y, head.target_z);
+                coordinated_move(&head);
+                for(int i = 0; i<3; i++) lastCords[i] = cords[i];
+                ESP_LOGI(TAG, "FINISHED MOVING HEAD");
+                ESP_LOGI(TAG, "FINISHED G0");
+                xSemaphoreGive(parseSemaphore);
+            }
+            else if ((strcmp(cmd, "G1") == 0) && (xSemaphoreTake(parseSemaphore, portMAX_DELAY) == pdPASS))
+            {
+                ESP_LOGI(TAG, "CALLING G1");
+                if((cords[X] != lastCords[X]) || (cords[Y] != lastCords[Y]))
+                {
+                ESP_LOGI(TAG, "LAST CORDS X/Y X: %.3f Y:%.3f", lastCords[X], lastCords[Y]);
+                ESP_LOGI(TAG, "SETTING X/Y X: %.3f Y:%.3f", cords[X], cords[Y]);
+                head.target_x = (float)cords[X];
+                head.target_y = (float)cords[Y];
+                head.feed_rate_hz = 1000;
+                // turn on extruder so need to calculate how much it extrudes
+                ESP_LOGI(TAG, "SETTING FREQUENCY");
+                stepper_set_frequency(E, feed);
+                ESP_LOGI(TAG, "MOVING HEAD");
+                coordinated_move(&head);
+                ESP_LOGI(TAG, "FINISHED MOVING HEAD IN X/Y");
+                for(int i = 0; i<2; i++) lastCords[i] = cords[i];
+                }else if(cords[Z] != lastCords[Z])
+                {
+                    stepper_set_frequency(E, 0);
+                    ESP_LOGI(TAG, "LAST CORDS Z: %.3f", lastCords[Z]);
+                    ESP_LOGI(TAG, "SETTING Z: %.3f", cords[Z]);
+                    head.target_z = (float)cords[Z];
+                    head.feed_rate_hz = 1000;
+                    coordinated_move(&head);
+                    lastCords[Z] = cords[Z];
+                    ESP_LOGI(TAG, "FINISHED MOVING HEAD IN Z");
+                    ESP_LOGI(TAG, "FINISHED G1");
+                }
+                xSemaphoreGive(parseSemaphore);
+            }
+            else if ((strcmp(cmd, "G21") == 0) && (xSemaphoreTake(parseSemaphore, portMAX_DELAY) == pdPASS))
+            {
+                ESP_LOGI(TAG, "SET UNIT MODE MILLIMETERS");
+                xSemaphoreGive(parseSemaphore);
+            }
+            else if ((strcmp(cmd, "G90") == 0) && (xSemaphoreTake(parseSemaphore, portMAX_DELAY) == pdPASS))
+            {
+                ESP_LOGI(TAG, "SET DISTANCE MODE ABSOLUTE");
+                xSemaphoreGive(parseSemaphore);
+            }
+            else if ((strcmp(cmd, "G92") == 0) && (xSemaphoreTake(parseSemaphore, portMAX_DELAY) == pdPASS))
+            {
+                ESP_LOGI(TAG, "SET AXIS POSITION");
+                xSemaphoreGive(parseSemaphore);
+                // } else if ((strcmp(cmd, "F") == 0) && (xSemaphoreTake(parseSemaphore, portMAX_DELAY) == pdPASS)) {
+                //     feed =
+                //     xSemaphoreGive(parseSemaphore);
+            }
+            else if ((strcmp(cmd, "G28") == 0) && (xSemaphoreTake(parseSemaphore, portMAX_DELAY) == pdPASS))
+            {
+                ESP_LOGI(TAG, "CALLING G28");
+                homeMotors();
+                xSemaphoreGive(parseSemaphore);
             }
         }
+        fclose(file);
     }
 }
-
 /*
 gscrib G-Code list
 https://gscrib.readthedocs.io/en/latest/gcode-table.html
