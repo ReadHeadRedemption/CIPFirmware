@@ -47,6 +47,7 @@ void parserTask(void *pvParameters)
             ESP_LOGI(TAG, "Starting G-code parser task...");
             parse(spiffs_file);
             ESP_LOGI(TAG, "G-code parsing completed");
+            vTaskDelete(NULL);
         }
     }
 }
@@ -66,7 +67,7 @@ void moveMotor(void *pvParameters)
         moveTo.target_x = 0.0f;
         moveTo.target_y = 0.0f;
         moveTo.target_z = 0.0f;
-        moveTo.feed_rate_hz = 100000.0f;
+        moveTo.feed_rate_hz = 10000.0f;
         while (1)
         {
             if (xSemaphoreTake(TestButtonSemaphore, portMAX_DELAY) == pdTRUE)
@@ -279,9 +280,9 @@ void app_main(void)
         return;
     }
     // Test Tasks
-    //xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
+    xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
     //xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
-    // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
+    //xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
 
     //Create heater control task
     // xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);

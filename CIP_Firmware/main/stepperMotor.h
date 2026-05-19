@@ -39,9 +39,19 @@ typedef struct {
 
 // Struct to define a multi-axis move command
 typedef struct {
+    //Cartiezian cordinates that the movement command will try to target
     float target_x;
     float target_y;
     float target_z;
+
+    // how far the lead screw should push ink out
+    float moveE;
+
+    //Polar cordinate information for arc movement
+    float center_x;
+    float center_y;
+    bool circleDir;
+
     uint32_t feed_rate_hz; // Max speed of the lead axis
 } MoveCmd_t;
 
@@ -79,6 +89,12 @@ esp_err_t stepper_enable(motor_id_t motor_id, uint8_t enable);
  * @param move: a stucture that contains the movement frequency and the target coordinates
  */
 esp_err_t coordinated_move(MoveCmd_t * move);
+
+/**
+ * @brief Enable/disable motor output
+ * @param move: a stucture that contains the movement frequency and the target arc
+ */
+esp_err_t circular_move(MoveCmd_t *arc);
 
 /**
  * @brief Set motors to look for 0,0,0

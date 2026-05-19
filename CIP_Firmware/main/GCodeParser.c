@@ -16,6 +16,7 @@ void parse(char *fileLocation)
     parseSemaphore = xSemaphoreCreateMutex();
 
     float scale = 1.0;
+    float eScale = 0.2;
     bool distMode = true;
     MoveCmd_t head;
     head.target_x = cords[X] * scale;
@@ -46,13 +47,14 @@ void parse(char *fileLocation)
             sscanf(line, "%4s", cmd);
             ESP_LOGI(TAG, "COMMAND: %s", cmd);
             ESP_LOGI(TAG, "TYPE: %c", cmd[0]);
-            if (strcmp(&cmd[0], ";") == 0 || strcmp(&cmd[0], " ") == 0) continue;
+            if (strcmp(&cmd[0], ";") == 0 || strcmp(&cmd[0], " ") == 0)
+                continue;
             else if (cmd[0] == 'F')
             {
                 if ((p = strchr(line, 'F')) != NULL)
-                    {
-                        sscanf(p + 1, "%ld", &feed);
-                    }
+                {
+                    sscanf(p + 1, "%ld", &feed);
+                }
                 head.feed_rate_hz = feed;
             }
             else if (cmd[0] == 'G')
@@ -83,7 +85,6 @@ void parse(char *fileLocation)
                     {
                         sscanf(p + 1, "%ld", &feed);
                         head.feed_rate_hz = feed;
-
                     }
                     int g = atoi(cmd + 1);
                     switch (g)
@@ -92,40 +93,58 @@ void parse(char *fileLocation)
                         ESP_LOGI(TAG, "CALLING G0");
                         if (distMode)
                         {
-                            if(coordChange[0])head.target_x = cords[X] * scale;
-                            if(coordChange[1])head.target_y = cords[Y] * scale;
-                            if(coordChange[2])head.target_z = cords[Z] * scale;
+                            if (coordChange[0])
+                                head.target_x = cords[X] * scale;
+                            if (coordChange[1])
+                                head.target_y = cords[Y] * scale;
+                            if (coordChange[2])
+                                head.target_z = cords[Z] * scale;
                         }
                         else
                         {
-                            if(coordChange[0])head.target_x += cords[X] * scale;
-                            if(coordChange[1])head.target_y += cords[Y] * scale;
-                            if(coordChange[2])head.target_z += cords[Z] * scale;
+                            if (coordChange[0])
+                                head.target_x += cords[X] * scale;
+                            if (coordChange[1])
+                                head.target_y += cords[Y] * scale;
+                            if (coordChange[2])
+                                head.target_z += cords[Z] * scale;
                         }
-                        ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f", 
-                                    &head.target_x, &head.target_y, &head.target_z);
+                        ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f",
+                                 &head.target_x, &head.target_y, &head.target_z);
                         coordinated_move(&head);
                         break;
                     case 1: // linear movement
                         ESP_LOGI(TAG, "CALLING G1");
+                        float lastLocation[3] = {head.target_x, head.target_y, head.target_z};
+                        float dE[3] = {0.0f};
                         if (distMode)
                         {
-                            if(coordChange[0])head.target_x = cords[X] * scale;
-                            if(coordChange[1])head.target_y = cords[Y] * scale;
-                            if(coordChange[2])head.target_z = cords[Z] * scale;
+                            if (coordChange[0])
+                                head.target_x = cords[X] * scale;
+                            if (coordChange[1])
+                                head.target_y = cords[Y] * scale;
+                            if (coordChange[2])
+                                head.target_z = cords[Z] * scale;
                         }
                         else
                         {
-                            if(coordChange[0])head.target_x += cords[X] * scale;
-                            if(coordChange[1])head.target_y += cords[Y] * scale;
-                            if(coordChange[2])head.target_z += cords[Z] * scale;
+                            if (coordChange[0])
+                                head.target_x += cords[X] * scale;
+                            if (coordChange[1])
+                                head.target_y += cords[Y] * scale;
+                            if (coordChange[2])
+                                head.target_z += cords[Z] * scale;
                         }
-                        stepper_set_direction(MOTOR_E,1);
-                        stepper_set_frequency(MOTOR_E, feed);
-                        ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f", 
-                                    head.target_x, head.target_y, head.target_z);
+                        for (int i = 0; i < 3; i++)(dE[i] = fabs(lastLocation[i] - dE[i]));
+                        float extrude = (float)sqrt((dE[0] * dE[0]) +
+                                                    (dE[1] * dE[1]) +
+                                                    (dE[2] * dE[2]));
+                        head.moveE = extrude * scale * eScale;
+                        ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f",
+                                 head.target_x, head.target_y, head.target_z);
+                        ESP_LOGI(TAG, "PUSHING HEAD %.3f MM", head.moveE);
                         coordinated_move(&head);
-                        stepper_set_frequency(MOTOR_E,0);
+                        stepper_set_frequency(MOTOR_E, 0);
                         break;
                     default:
                         break;
@@ -133,50 +152,93 @@ void parse(char *fileLocation)
                 }
                 else if ((strcmp(cmd, "G2") == 0) || (strcmp(cmd, "G3") == 0))
                 {
-
-                }
-                else if (strcmp(cmd, "G4") == 0) // delay in seconds
-                {
-                    int delay = 0;
-                    if ((p = strchr(line, 'P')) != NULL)
+                    if ((p = strchr(line, 'X')) != NULL)
                     {
-                        sscanf(p + 1, "%d", &delay); // Use %f for float!
+                        sscanf(p + 1, "%f", &cords[X]); // Use %f for float!
+                        coordChange[0] = true;
                     }
-                    ESP_LOGI(TAG, "DELAY FOR %d SECONDS", delay);
-                    vTaskDelay(pdMS_TO_TICKS(delay*1000));
+                    // Check Y
+                    if ((p = strchr(line, 'Y')) != NULL)
+                    {
+                        sscanf(p + 1, "%f", &cords[Y]);
+                        coordChange[1] = true;
+                    }
+                    float I, J = 0.0f;
+                    // Check I
+                    if ((p = strchr(line, 'I')) != NULL)
+                    {
+                        coordChange[2] = true;
+                        sscanf(p + 1, "%f", &I);
+                    }
+                    // Check J
+                    if ((p = strchr(line, 'J')) != NULL)
+                    {
+                        sscanf(p + 1, "%f", &J);
+                        int g = atoi(cmd + 1);
+                        head.circleDir = (g == 2) ? false : true;
+                        float lastLocation[4] = {head.target_x, head.target_y, head.center_x, head.center_y};
+                        float dE[4] = {0.0f};
+                        for (int i = 0; i < 4; i++)
+                            (dE[i] = fabs(lastLocation[i] - dE[i]));
+                        float extrude = (float)sqrt((dE[0] * dE[0]) +
+                                                    (dE[1] * dE[1]) +
+                                                    (dE[2] * dE[2]) +
+                                                    (dE[2] * dE[2]));
+                        head.moveE = extrude * scale * eScale;
+                        ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f",
+                                 head.target_x, head.target_y, head.target_z);
+                        ESP_LOGI(TAG, "PUSHING HEAD %.3f MM", head.moveE);
+
+                        if (coordChange[0])head.target_x = cords[X] * scale;
+                        if (coordChange[1])head.target_y = cords[Y] * scale;
+                        head.center_x = I;
+                        head.center_y = J;
+                        circular_move(&head);
+                    }
+                    else if (strcmp(cmd, "G4") == 0) // delay in seconds
+                    {
+                        int delay = 0;
+                        if ((p = strchr(line, 'P')) != NULL)
+                        {
+                            sscanf(p + 1, "%d", &delay); // Use %f for float!
+                        }
+                        ESP_LOGI(TAG, "CALLING G4: DELAY FOR %d SECONDS", delay);
+                        vTaskDelay(pdMS_TO_TICKS(delay * 1000));
+                    }
+                    else if (strcmp(cmd, "G20") == 0) // Set Unit In
+                    {
+                        ESP_LOGI(TAG, "CALLING G20: UNITS INCHES");
+                        scale = 25.4;
+                    }
+                    else if (strcmp(cmd, "G21") == 0) // Set Unit MM
+                    {
+                        ESP_LOGI(TAG, "CALLING G21: UNITS MM");
+                        scale = 1;
+                    }
+                    else if (strcmp(cmd, "G28") == 0) // Home motors
+                    {
+                        ESP_LOGI(TAG, "CALLING G28: HOMING SEQUENCE");
+                        homeMotors();
+                    }
+                    else if (strcmp(cmd, "G90") == 0) // Set Distance Mode Absolute
+                    {
+                        ESP_LOGI(TAG, "CALLING G90: ABSOLUTE DISTANCE");
+                        distMode = true;
+                    }
+                    else if (strcmp(cmd, "G91") == 0) // Set Distance Mode Relative
+                    {
+                        ESP_LOGI(TAG, "CALLING G91: RELATIVE DISTANCE");
+                        distMode = false;
+                    }
                 }
-                else if (strcmp(cmd, "G20") == 0) // Set Unit In
+                else if (strcmp(&cmd[0], "M") == 0)
                 {
-                    ESP_LOGI(TAG, "CALLING G20");
-                    scale = 25.4;
                 }
-                else if (strcmp(cmd, "G21") == 0) // Set Unit MM
-                {
-                    ESP_LOGI(TAG, "CALLING G21");
-                    scale = 1;
-                }
-                else if (strcmp(cmd, "G28") == 0) // Home motors
-                {
-                    ESP_LOGI(TAG, "CALLING G28");
-                    homeMotors();
-                }
-                else if (strcmp(cmd, "G90") == 0) // Set Distance Mode Absolute
-                {
-                    distMode = true;
-                }
-                else if (strcmp(cmd, "G91") == 0) // Set Distance Mode Relative
-                {
-                    distMode = false;
-                }
-            }
-            else if (strcmp(&cmd[0], "M") == 0)
-            {
             }
         }
     }
 }
-
-/*
-gscrib G-Code list
-https://gscrib.readthedocs.io/en/latest/gcode-table.html
-*/
+    /*
+    gscrib G-Code list
+    https://gscrib.readthedocs.io/en/latest/gcode-table.html
+    */
