@@ -7,34 +7,47 @@
 #include "freertos/task.h"
 
 
-//SPI Pins
+////////////////////////////////////////////////////////////////////
+//
+//                  SPI PINS
+//
+////////////////////////////////////////////////////////////////////
+
 // #define MISO GPIO_NUM_15
 // #define MOSI GPIO_NUM_2
 // #define SCK  GPIO_NUM_4
 // #define CS_TOUCH GPIO_NUM_16
 // #define CS_DISPLAY GPIO_NUM_17
 
-//Stepper Motor Pins
+
+////////////////////////////////////////////////////////////////////
+//
+//                  STEPPER MOTOR PINS
+//
+////////////////////////////////////////////////////////////////////
+
 #define tempEnable GPIO_NUM_2
 
+// X Pins
 #define xDir GPIO_NUM_4
 #define xStep GPIO_NUM_5
 //#define xEnable GPIO_NUM_4
 
-// swap y/z once test board is fixed
+// Y Pins
 #define yDir GPIO_NUM_6
 #define yStep GPIO_NUM_7
 //#define yEnable GPIO_NUM_5
 
+// Z Pins
 #define zDir GPIO_NUM_15
 #define zStep GPIO_NUM_16
 //#define zEnable GPIO_NUM_6
 
-#define eStep GPIO_NUM_41
-#define eDir GPIO_NUM_42
-//#define eEnable GPIO_NUM_7
-// //Heater Pins
+// Extruder Pins
+#define eDir GPIO_NUM_17
+#define eStep GPIO_NUM_18
 
+//#define eEnable GPIO_NUM_7
 
 // Limit Switch Pins
 #define xSwitch GPIO_NUM_12
@@ -46,30 +59,47 @@
 // #define zSwitch GPIO_NUM_27
 #define eSwitch GPIO_NUM_11
 
+////////////////////////////////////////////////////////////////////
+//
+//                  HEATER PINS
+//
+////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////
+//
+//                  SD CARD PINS
+//
+////////////////////////////////////////////////////////////////////
+
 // // SD Card Pins
 
-// // HeadID Pins
+////////////////////////////////////////////////////////////////////
+//
+//                  HEAD ID PINS
+//
+////////////////////////////////////////////////////////////////////
+
 // #define HEAD_ID_0 GPIO_NUM_22
 // #define HEAD_ID_1 GPIO_NUM_23
 
-// // Raspberry Pi Communication Pins
+////////////////////////////////////////////////////////////////////
+//
+//                  RASPBERRY PI COMMUNICATION PINS
+//
+////////////////////////////////////////////////////////////////////
+
 // #define RPI_UART_TX GPIO_NUM_1   // UART0 TX
 // #define RPI_UART_RX GPIO_NUM_3   // UART0 RX
 
-// Misc
+////////////////////////////////////////////////////////////////////
+//
+//                  MISCILANEOUS PINS
+//
+////////////////////////////////////////////////////////////////////
+
 #define StartButton GPIO_NUM_1
 #define TestButton GPIO_NUM_2
 //#define EStop GPIO_NUM_13
-
-
-/**
- * @brief Configure GPIO pins for the system
- */
-void pinConfiguations(void);
-
-/**
- * @brief Test task for pin testing
- */
-void PinTestTask(void *pvParameters);
 
 #endif  // PINS_H
