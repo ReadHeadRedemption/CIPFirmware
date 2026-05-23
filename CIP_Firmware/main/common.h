@@ -5,7 +5,7 @@
 
 //ESP32 Headers
 #include "driver/gpio.h"
-#include "driver/adc.h"
+
 #include "esp_log.h"
 #include "pins.h"
 

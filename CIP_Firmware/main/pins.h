@@ -2,7 +2,6 @@
 #define PINS_H
 
 #include "driver/gpio.h"
-#include "driver/adc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -13,11 +12,21 @@
 //
 ////////////////////////////////////////////////////////////////////
 
-// #define MISO GPIO_NUM_15
-// #define MOSI GPIO_NUM_2
-// #define SCK  GPIO_NUM_4
-// #define CS_TOUCH GPIO_NUM_16
-// #define CS_DISPLAY GPIO_NUM_17
+#define MISO GPIO_NUM_21
+#define MOSI GPIO_NUM_19
+#define SCK  GPIO_NUM_20
+
+
+////////////////////////////////////////////////////////////////////
+//
+//                  DISPLAY PINS
+//
+////////////////////////////////////////////////////////////////////
+#define reset GPIO_NUM_9
+#define csDisplay GPIO_NUM_8
+#define dcDisplay GPIO_NUM_11 
+#define csTouch GPIO_NUM_3
+#define touchInterrupt GPIO_NUM_40
 
 
 ////////////////////////////////////////////////////////////////////
@@ -29,23 +38,23 @@
 #define tempEnable GPIO_NUM_2
 
 // X Pins
-#define xDir GPIO_NUM_4
-#define xStep GPIO_NUM_5
+#define xDir GPIO_NUM_6
+#define xStep GPIO_NUM_7
 //#define xEnable GPIO_NUM_4
 
 // Y Pins
-#define yDir GPIO_NUM_6
-#define yStep GPIO_NUM_7
+#define yDir GPIO_NUM_15
+#define yStep GPIO_NUM_16
 //#define yEnable GPIO_NUM_5
 
 // Z Pins
-#define zDir GPIO_NUM_15
-#define zStep GPIO_NUM_16
+#define zDir GPIO_NUM_17
+#define zStep GPIO_NUM_18
 //#define zEnable GPIO_NUM_6
 
 // Extruder Pins
-#define eDir GPIO_NUM_17
-#define eStep GPIO_NUM_18
+#define eDir GPIO_NUM_4
+#define eStep GPIO_NUM_5
 
 //#define eEnable GPIO_NUM_7
 
@@ -54,10 +63,6 @@
 #define ySwitch GPIO_NUM_13
 #define zSwitch GPIO_NUM_14
 
-// #define xSwitch GPIO_NUM_12
-// #define ySwitch GPIO_NUM_14
-// #define zSwitch GPIO_NUM_27
-#define eSwitch GPIO_NUM_11
 
 ////////////////////////////////////////////////////////////////////
 //

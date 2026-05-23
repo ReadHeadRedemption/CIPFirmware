@@ -23,6 +23,8 @@
 //G-code Headers
 #include "GCodeParser.h"
 
+//Display Headers
+#include "display.h"
 
 //Included to host files on esp32 memory for testing purposes, 
 //will be removed when SD card is implemented

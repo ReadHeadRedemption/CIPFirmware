@@ -208,7 +208,7 @@ void parse(char *fileLocation)
                                 head.target_y = cords[Y] * scale;
                             head.center_x = I;
                             head.center_y = J;
-                            SP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f WITH CENTER I:%.3f J:%.3f",
+                            ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f WITH CENTER I:%.3f J:%.3f",
                                      head.target_x, head.target_y, head.center_x, head.center_y);
                             ESP_LOGI(TAG, "PUSHING HEAD %.3f MM", head.moveE);
                             circular_move(&head);
