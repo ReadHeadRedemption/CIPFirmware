@@ -197,31 +197,38 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     stepper_set_direction(MOTOR_Z, (dz >= 0) ? 0 : 1);
     stepper_set_direction(MOTOR_E, (de >= 0) ? 0 : 1);
 
+    esp_rom_delay_us(5);
+
     // 3. Movement Loop Setup
     uint32_t steps_taken = 0;
-    const uint32_t chunk_size = 10;
+    static const uint32_t chunk_size = 10;
 
-    // --- ACCELERATION CONFIGURATION ---
-    uint32_t min_feed_rate = 200; // Minimum frequency (Hz) to start/end movement safely
-    if (min_feed_rate > move->feed_rate_hz)
-    {
-        min_feed_rate = move->feed_rate_hz;
+    // --- TRUE KINEMATIC ACCELERATION CONFIGURATION ---
+    float v_max = (float)move->feed_rate_hz;
+    float v_min = 200.0f; // Minimum jerk speed (Hz)
+    if (v_max < v_min) {
+        v_max = v_min;
     }
 
-    // Number of steps over which to accelerate/decelerate.
-    // Capped at max_steps / 2 to ensure a clean profile on ultra-short moves.
-    uint32_t accel_steps = 300; // Adjust this value to change acceleration aggressiveness
+    // Define your acceleration rate in Steps / Sec^2
+    // You may want to pass this in via MoveCmd_t eventually!
+    float accel_rate = 10000.0f; 
+
+    // Calculate required steps to reach v_max using s = (v_f^2 - v_i^2) / (2a)
+    uint32_t accel_steps = (uint32_t)((v_max * v_max - v_min * v_min) / (2.0f * accel_rate));
+
+    // The Triangle Check: Cap accel steps if the move is too short
     if (accel_steps > max_steps / 2)
     {
         accel_steps = max_steps / 2;
     }
-    // ----------------------------------
+    
+    uint32_t decel_start_step = max_steps - accel_steps;
+    // -------------------------------------------------
 
-    // Independent buffers per axis to prevent memory overwrites
     rmt_symbol_word_t sym_buffer[NUM_MOTORS][chunk_size];
-
-    // BRESENHAM ACCUMULATORS: Tracks fractional steps left over from truncation
-    float step_error[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    static float step_error[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    uint32_t actual_steps[4] = {0, 0, 0, 0};
 
     // 4. Movement Loop
     while (steps_taken < max_steps)
@@ -234,15 +241,19 @@ esp_err_t coordinated_move(MoveCmd_t *move)
 
         if (steps_taken < accel_steps)
         {
-            // RAMP UP: Scale speed linearly from min_feed_rate to target feed_rate
-            current_feed_rate = min_feed_rate + ((move->feed_rate_hz - min_feed_rate) * steps_taken) / accel_steps;
+            // RAMP UP: v = sqrt(v_i^2 + 2*a*s)
+            current_feed_rate = (uint32_t)sqrtf(v_min * v_min + 2.0f * accel_rate * steps_taken);
         }
-        else if (steps_taken > (max_steps - accel_steps))
+        else if (steps_taken >= decel_start_step)
         {
-            // RAMP DOWN: Scale speed linearly back down to min_feed_rate
+            // RAMP DOWN: distance from end is (max_steps - steps_taken)
             uint32_t steps_from_end = max_steps - steps_taken;
-            current_feed_rate = min_feed_rate + ((move->feed_rate_hz - min_feed_rate) * steps_from_end) / accel_steps;
+            current_feed_rate = (uint32_t)sqrtf(v_min * v_min + 2.0f * accel_rate * steps_from_end);
         }
+
+        // Safety clamps just in case of floating point rounding errors
+        if (current_feed_rate < (uint32_t)v_min) current_feed_rate = (uint32_t)v_min;
+        if (current_feed_rate > move->feed_rate_hz) current_feed_rate = move->feed_rate_hz;
         // --------------------------------------
 
         // Step A: Queue up and start all active motors simultaneously
@@ -250,37 +261,25 @@ esp_err_t coordinated_move(MoveCmd_t *move)
         {
             if (steps[i] > 0)
             {
-                // Calculate exactly how many ideal steps this axis should take in this batch
                 float ratio = (float)steps[i] / max_steps;
                 float ideal_steps = batch * ratio;
-
-                // Add the accumulated error from previous chunks (Bresenham step)
                 float total_steps_owed = ideal_steps + step_error[i];
-
-                // Extract the integer number of steps to actually execute right now
                 uint32_t axis_steps = (uint32_t)total_steps_owed;
 
-                // Keep the fractional remainder for the next loop iteration
                 step_error[i] = total_steps_owed - (float)axis_steps;
 
-                // Only transmit if the accumulator triggered an actual integer step
                 if (axis_steps > 0)
                 {
-                    // Recalculate frequency using our new dynamic current_feed_rate
+                    actual_steps[i] += axis_steps;
                     uint32_t axis_freq = (uint32_t)((axis_steps * current_feed_rate) / batch);
 
                     if (axis_freq > 0)
                     {
                         uint32_t ticks = 1000000 / (2 * axis_freq);
 
-                        // Prevent low-speed clock overflow (RMT duration limit is 15-bit)
-                        if (ticks > 32767)
-                            ticks = 32767;
-                        // Prevent high-speed narrow pulse issues (DRV8825 limit)
-                        if (ticks < 3)
-                            ticks = 3;
+                        if (ticks > 32767) ticks = 32767;
+                        if (ticks < 3) ticks = 3;
 
-                        // Populate the buffer for this specific axis
                         for (uint32_t s = 0; s < axis_steps; s++)
                         {
                             sym_buffer[i][s] = (rmt_symbol_word_t){
@@ -317,23 +316,20 @@ esp_err_t coordinated_move(MoveCmd_t *move)
         steps_taken += batch;
     }
 
-    // 5. Update positions
-    motors[MOTOR_X].position = move->target_x;
-    motors[MOTOR_Y].position = move->target_y;
-    motors[MOTOR_Z].position = move->target_z;
-    motors[MOTOR_E].position = move->moveE;
+    // 5. Update positions based on actual steps executed
+    motors[MOTOR_X].position += (actual_steps[0] / StepPerMM[0]) * ((dx >= 0) ? 1.0f : -1.0f);
+    motors[MOTOR_Y].position += (actual_steps[1] / StepPerMM[1]) * ((dy >= 0) ? 1.0f : -1.0f);
+    motors[MOTOR_Z].position += (actual_steps[2] / StepPerMM[2]) * ((dz >= 0) ? 1.0f : -1.0f);
+    motors[MOTOR_E].position += (actual_steps[3] / StepPerMM[3]) * ((de >= 0) ? 1.0f : -1.0f);
+    
+    for (int i = 0; i < 4; i++)
+        motors[i].targetStep += actual_steps[i];
 
     return ESP_OK;
 }
+
 esp_err_t circular_move(MoveCmd_t *arc)
 {
-    // arc parameters:
-    // - target_x, target_y: End position
-    // - center_i, center_j: Arc center offsets (I, J from current position)
-    // - is_clockwise: true for G2, false for G3
-    // - feed_rate_hz: Movement speed
-    // - target_z, target_e: Z and E positions at arc end
-
     float StepPerMM[] = {xStepsPerMM, yStepsPerMM, zStepsPerMM, eStepsPerMM};
 
     // 1. Calculate arc center in absolute coordinates
@@ -350,7 +346,6 @@ esp_err_t circular_move(MoveCmd_t *arc)
     float start_angle = atan2f(r_start_y, r_start_x);
     float end_angle = atan2f(r_end_y, r_end_x);
 
-    // Validate arc closure (optional error checking)
     float end_radius = sqrtf(r_end_x * r_end_x + r_end_y * r_end_y);
     if (fabsf(radius - end_radius) > 0.5f)
     {
@@ -362,22 +357,19 @@ esp_err_t circular_move(MoveCmd_t *arc)
 
     if (arc->circleDir) // G2: Clockwise
     {
-        if (angle_diff > 0)
-            angle_diff -= 2.0f * M_PI;
+        if (angle_diff > 0) angle_diff -= 2.0f * M_PI;
     }
     else // G3: Counterclockwise
     {
-        if (angle_diff < 0)
-            angle_diff += 2.0f * M_PI;
+        if (angle_diff < 0) angle_diff += 2.0f * M_PI;
     }
 
     // 4. Calculate arc parameters
     float arc_length = radius * fabsf(angle_diff);
-    float segment_mm = 1.0f; // 1mm segments for smooth arcs (adjust as needed)
+    float segment_mm = 1.0f; // 1mm segments
     uint32_t num_segments = (uint32_t)ceilf(arc_length / segment_mm);
 
-    if (num_segments == 0)
-        num_segments = 1;
+    if (num_segments == 0) num_segments = 1;
 
     // 5. Precalculate Z and E interpolation
     float z_start = motors[MOTOR_Z].position;
@@ -385,58 +377,65 @@ esp_err_t circular_move(MoveCmd_t *arc)
     float dz = arc->target_z - z_start;
     float de = arc->moveE - e_start;
 
-    // --- ACCELERATION CONFIGURATION ---
-    uint32_t min_feed_rate = 200;
-    if (min_feed_rate > arc->feed_rate_hz)
-        min_feed_rate = arc->feed_rate_hz;
+    // --- TRUE KINEMATIC ACCELERATION CONFIGURATION (By Segment) ---
+    float v_max = (float)arc->feed_rate_hz;
+    float v_min = 200.0f; 
+    if (v_max < v_min) v_max = v_min;
+    
+    float accel_rate_steps = 10000.0f; 
+    // Approximate segments per second squared (Assuming max axis StepPerMM as the baseline)
+    float accel_rate_segments = accel_rate_steps / (StepPerMM[0] * segment_mm); 
 
-    uint32_t accel_steps = 300;
-    if (accel_steps > num_segments / 2)
-        accel_steps = num_segments / 2;
-    // ----------------------------------
+    uint32_t accel_segments = (uint32_t)((v_max * v_max - v_min * v_min) / (2.0f * accel_rate_segments * (StepPerMM[0] * segment_mm)));
 
-    rmt_symbol_word_t sym_buffer[NUM_MOTORS][10]; // Smaller chunks per segment
-    float step_error[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    if (accel_segments > num_segments / 2)
+    {
+        accel_segments = num_segments / 2;
+    }
+    uint32_t decel_start_seg = num_segments - accel_segments;
+    // --------------------------------------------------------------
+
+    rmt_symbol_word_t sym_buffer[NUM_MOTORS][10]; 
+    static float step_error[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
     // 6. Arc movement loop
     for (uint32_t seg = 0; seg < num_segments; seg++)
     {
-        // --- DYNAMIC FEED RATE (applies to each segment) ---
+        // --- DYNAMIC FEED RATE ---
         uint32_t current_feed_rate = arc->feed_rate_hz;
 
-        if (seg < accel_steps)
+        if (seg < accel_segments)
         {
-            current_feed_rate = min_feed_rate +
-                                ((arc->feed_rate_hz - min_feed_rate) * seg) / accel_steps;
+            float steps_equivalent = seg * (StepPerMM[0] * segment_mm);
+            current_feed_rate = (uint32_t)sqrtf(v_min * v_min + 2.0f * accel_rate_steps * steps_equivalent);
         }
-        else if (seg > (num_segments - accel_steps))
+        else if (seg >= decel_start_seg)
         {
-            uint32_t steps_from_end = num_segments - seg;
-            current_feed_rate = min_feed_rate +
-                                ((arc->feed_rate_hz - min_feed_rate) * steps_from_end) / accel_steps;
+            uint32_t segs_from_end = num_segments - seg;
+            float steps_equivalent = segs_from_end * (StepPerMM[0] * segment_mm);
+            current_feed_rate = (uint32_t)sqrtf(v_min * v_min + 2.0f * accel_rate_steps * steps_equivalent);
         }
-        // ---------------------------------------------------
 
-        // Calculate current position on arc
+        if (current_feed_rate < (uint32_t)v_min) current_feed_rate = (uint32_t)v_min;
+        if (current_feed_rate > arc->feed_rate_hz) current_feed_rate = arc->feed_rate_hz;
+        // -------------------------
+
         float t = (float)seg / num_segments;
         float current_angle = start_angle + angle_diff * t;
 
         float next_t = (float)(seg + 1) / num_segments;
         float next_angle = start_angle + angle_diff * next_t;
 
-        // Current waypoint
         float current_x = center_x + radius * cosf(current_angle);
         float current_y = center_y + radius * sinf(current_angle);
         float current_z = z_start + dz * t;
         float current_e = e_start + de * t;
 
-        // Next waypoint
         float next_x = center_x + radius * cosf(next_angle);
         float next_y = center_y + radius * sinf(next_angle);
         float next_z = z_start + dz * next_t;
         float next_e = e_start + de * next_t;
 
-        // Calculate deltas for this segment
         float seg_dx = next_x - current_x;
         float seg_dy = next_y - current_y;
         float seg_dz = next_z - current_z;
@@ -453,23 +452,19 @@ esp_err_t circular_move(MoveCmd_t *arc)
             if (steps[i] > max_steps)
                 max_steps = steps[i];
 
-        if (max_steps == 0)
-            continue; // Skip segments with no motion
+        if (max_steps == 0) continue; 
 
-        // 7. Set Directions
         stepper_set_direction(MOTOR_X, (seg_dx >= 0) ? 0 : 1);
         stepper_set_direction(MOTOR_Y, (seg_dy >= 0) ? 0 : 1);
         stepper_set_direction(MOTOR_Z, (seg_dz >= 0) ? 0 : 1);
         stepper_set_direction(MOTOR_E, (seg_de >= 0) ? 0 : 1);
 
-        // 8. Execute segment steps
         uint32_t steps_taken = 0;
         const uint32_t chunk_size = 10;
 
         while (steps_taken < max_steps)
         {
             uint32_t batch = (max_steps - steps_taken < chunk_size) ? (max_steps - steps_taken) : chunk_size;
-
             bool channel_active[4] = {false, false, false, false};
 
             for (int i = 0; i < 4; i++)
@@ -490,10 +485,8 @@ esp_err_t circular_move(MoveCmd_t *arc)
                         {
                             uint32_t ticks = 1000000 / (2 * axis_freq);
 
-                            if (ticks > 32767)
-                                ticks = 32767;
-                            if (ticks < 3)
-                                ticks = 3;
+                            if (ticks > 32767) ticks = 32767;
+                            if (ticks < 3) ticks = 3;
 
                             for (uint32_t s = 0; s < axis_steps; s++)
                             {
@@ -514,12 +507,12 @@ esp_err_t circular_move(MoveCmd_t *arc)
                                 &tx_conf));
 
                             channel_active[i] = true;
+                            motors[i].targetStep += axis_steps;
                         }
                     }
                 }
             }
 
-            // Wait for all active channels to complete
             for (int i = 0; i < 4; i++)
             {
                 if (channel_active[i])
@@ -527,11 +520,9 @@ esp_err_t circular_move(MoveCmd_t *arc)
                     rmt_tx_wait_all_done(motor_channels[i], -1);
                 }
             }
-
             steps_taken += batch;
         }
 
-        // Update current position for next segment
         motors[MOTOR_X].position = next_x;
         motors[MOTOR_Y].position = next_y;
         motors[MOTOR_Z].position = next_z;
@@ -638,9 +629,15 @@ esp_err_t homeMotors()
     // Set actual absolute zero
     motors[MOTOR_X].position = 0;
     motors[MOTOR_Y].position = 200;
+    motors[MOTOR_Z].position = 0;
 
     // initalize extruder at position 0
     motors[MOTOR_E].position = 0;
+    
+    // Reset step counters after homing to establish new reference frame
+    for (int i = 0; i < NUM_MOTORS; i++)
+        motors[i].targetStep = 0;
+    
     ESP_LOGI(TAG, "Homed");
     return ESP_OK;
 }

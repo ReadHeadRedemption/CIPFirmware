@@ -26,23 +26,143 @@ static esp_lcd_touch_handle_t touch_handle = NULL;
 static lv_display_t *g_lv_disp = NULL;
 static lv_indev_t *g_lv_touch_indev = NULL;
 static lv_obj_t *g_status_label = NULL;
+static lv_obj_t *g_main_screen = NULL;
 
-static void btn_event_cb(lv_event_t *e)
+static void home_screen_cb(lv_event_t *e)
 {
-    if (!lvgl_port_lock(0)) return;
+    if (!lvgl_port_lock(0))
+        return;
+    if (g_main_screen)
+    {
+        lv_scr_load(g_main_screen);
+    }
+    lvgl_port_unlock();
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
+//                          FILE SELECT SCREEN
+//
+///////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////
+//
+//                          TEST SCREEN
+//
+///////////////////////////////////////////////////////////////////////////
+static void tstbtn_event_cb(lv_event_t *e)
+{
+    if (!lvgl_port_lock(0))
+        return;
     static int cnt = 0;
     char buf[64];
-    snprintf(buf, sizeof(buf), "Button pressed %d times", ++cnt);
+    snprintf(buf, sizeof(buf), " Test Button pressed %d times", ++cnt);
+    lv_label_set_text(g_status_label, buf);
+    /* Signal main/tasks via semaphore so other tasks can start */
+    if (TestButtonSemaphore)
+    {
+        xSemaphoreGive(TestButtonSemaphore);
+    }
+    lvgl_port_unlock();
+}
+
+static void parsebtn_event_cb(lv_event_t *e)
+{
+    if (!lvgl_port_lock(0))
+        return;
+    char buf[64];
+    snprintf(buf, sizeof(buf), "PARSE GCODE");
+    if (StartButtonSemaphore)
+    {
+        xSemaphoreGive(StartButtonSemaphore);
+    }
     lv_label_set_text(g_status_label, buf);
     lvgl_port_unlock();
 }
 
+void test_screen(void)
+{
+    if (!lvgl_port_lock(0))
+        return;
+
+    ESP_LOGI(TAG, "Switching to test screen...");
+
+    lv_obj_t *scr = lv_obj_create(NULL);
+    lv_scr_load(scr);
+
+    /* Set a standard antialiased font. Removed subpx fonts as they look terrible when rotated. */
+#if LV_FONT_MONTSERRAT_16
+    lv_obj_set_style_text_font(scr, &lv_font_montserrat_16, 0);
+#elif LV_FONT_MONTSERRAT_14
+    lv_obj_set_style_text_font(scr, &lv_font_montserrat_14, 0);
+#endif
+
+    lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
+    lv_obj_set_style_text_color(scr, lv_color_black(), 0);
+
+    lv_obj_t *status_label = lv_label_create(scr);
+    lv_obj_set_width(status_label, LCD_H_RES - 20);
+    lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(status_label, lv_color_black(), 0);
+    lv_label_set_text(status_label, "Test screen\nPress BACK to return");
+    lv_obj_align(status_label, LV_ALIGN_TOP_MID, 0, 10);
+
+    // Create Back Button
+
+    lv_obj_t *back_btn = lv_btn_create(scr);
+    lv_obj_set_size(back_btn, 120, 40);
+    lv_obj_align(back_btn, LV_ALIGN_CENTER, 0, -60);
+    lv_obj_t *back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "BACK");
+    lv_obj_set_style_text_color(back_label, lv_color_black(), 0);
+    lv_obj_add_event_cb(back_btn, home_screen_cb, LV_EVENT_CLICKED, NULL);
+
+    // Create Parseing Gcode Button
+    lv_obj_t *parse_btn = lv_btn_create(scr);
+    lv_obj_set_size(parse_btn, 120, 40);
+    lv_obj_align(parse_btn, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_t *parse_label = lv_label_create(parse_btn);
+    lv_label_set_text(parse_label, "Parse Sample Gcode");
+    lv_obj_set_style_text_color(parse_label, lv_color_black(), 0);
+    lv_obj_add_event_cb(parse_btn, parsebtn_event_cb, LV_EVENT_CLICKED, NULL);
+
+    // Create Increment Button 
+    lv_obj_t *tst_btn = lv_btn_create(scr);
+    lv_obj_set_size(tst_btn, 120, 40);
+    lv_obj_align(tst_btn, LV_ALIGN_CENTER, 0, 60);
+    lv_obj_t *tst_label = lv_label_create(tst_btn);
+    lv_label_set_text(tst_label, "Test Button");
+    lv_obj_set_style_text_color(tst_label, lv_color_black(), 0);
+    lv_obj_add_event_cb(tst_btn, tstbtn_event_cb, LV_EVENT_CLICKED, NULL);
+
+    lvgl_port_unlock();
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
+//                          HOME SCREEN BUTTONS
+//
+///////////////////////////////////////////////////////////////////////////
+
 void display_update_status(const char *text)
 {
-    if (!text || !g_status_label) return;
-    if (!lvgl_port_lock(0)) return;
+    if (!text || !g_status_label)
+        return;
+    if (!lvgl_port_lock(0))
+        return;
     lv_label_set_text(g_status_label, text);
     lvgl_port_unlock();
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
+//                          DISPLAY INITILIZATION
+//
+///////////////////////////////////////////////////////////////////////////
+
+static void tstscr (lv_event_t *e)
+{
+    test_screen();
 }
 
 void display_init(void)
@@ -66,11 +186,11 @@ void display_init(void)
 
     /* Create ILI9341 panel */
     const esp_lcd_panel_dev_config_t panel_config = {
-        .reset_gpio_num = reset,  // Use GPIO_NUM_9 for proper hardware reset
+        .reset_gpio_num = reset, // Use GPIO_NUM_9 for proper hardware reset
 #if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
-        .rgb_endian = LCD_RGB_ENDIAN_BGR,
+        .rgb_endian = LCD_RGB_ENDIAN_BGR, // CHANGED: Fixes swapped Red/Blue colors
 #else
-        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR,
+        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB, // CHANGED: Fixes swapped Red/Blue colors
         .data_endian = LCD_RGB_DATA_ENDIAN_BIG,
 #endif
         .bits_per_pixel = 16,
@@ -78,9 +198,9 @@ void display_init(void)
     ESP_ERROR_CHECK(esp_lcd_new_panel_ili9341(lcd_io, &panel_config, &lcd_panel));
 
     esp_lcd_panel_reset(lcd_panel);
-    vTaskDelay(pdMS_TO_TICKS(100));  // Give display time to stabilize after reset
+    vTaskDelay(pdMS_TO_TICKS(100)); // Give display time to stabilize after reset
     esp_lcd_panel_init(lcd_panel);
-    vTaskDelay(pdMS_TO_TICKS(100));  // Ensure initialization is complete
+    vTaskDelay(pdMS_TO_TICKS(100)); // Ensure initialization is complete
     esp_lcd_panel_mirror(lcd_panel, true, false);
     esp_lcd_panel_disp_on_off(lcd_panel, true);
 
@@ -95,7 +215,7 @@ void display_init(void)
         .rst_gpio_num = reset,
         .int_gpio_num = touchInterrupt,
         .levels = {.reset = 0, .interrupt = 0},
-        .flags = {.swap_xy = 0, .mirror_x = 1, .mirror_y = 0},
+        .flags = {.swap_xy = 0, .mirror_x = 1, .mirror_y = 1},
     };
     ESP_ERROR_CHECK(esp_lcd_touch_new_spi_xpt2046(tp_io, &tp_cfg, &touch_handle));
 
@@ -116,20 +236,21 @@ void display_init(void)
 #if LVGL_VERSION_MAJOR >= 9
     disp_cfg.color_format = LV_COLOR_FORMAT_RGB565;
 #endif
-     disp_cfg.rotation.swap_xy = false;
-     disp_cfg.rotation.mirror_x = true;
-     disp_cfg.rotation.mirror_y = false;
+    disp_cfg.rotation.swap_xy = false;
+    disp_cfg.rotation.mirror_x = true;
+    disp_cfg.rotation.mirror_y = false;
     disp_cfg.flags.buff_dma = 1;
     disp_cfg.flags.buff_spiram = 0;
     disp_cfg.flags.sw_rotate = 0;
 #if LVGL_VERSION_MAJOR >= 9
-    disp_cfg.flags.swap_bytes = 1; // Required for this panel's RGB565 byte order
+    disp_cfg.flags.swap_bytes = 0; // CHANGED: 0 fixes "crunchy text" by keeping antialiasing gradients intact
 #endif
-    disp_cfg.flags.full_refresh = 0;  // Partial buffer refresh (more memory efficient)
+    disp_cfg.flags.full_refresh = 0; // Partial buffer refresh (more memory efficient)
     disp_cfg.flags.direct_mode = 0;
 
     g_lv_disp = lvgl_port_add_disp(&disp_cfg);
-    if (!g_lv_disp) {
+    if (!g_lv_disp)
+    {
         ESP_LOGE(TAG, "Failed to add LVGL display");
         return;
     }
@@ -140,7 +261,8 @@ void display_init(void)
         .handle = touch_handle,
     };
     g_lv_touch_indev = lvgl_port_add_touch(&touch_cfg);
-    if (!g_lv_touch_indev) {
+    if (!g_lv_touch_indev)
+    {
         ESP_LOGE(TAG, "Failed to add LVGL touch input");
         return;
     }
@@ -148,45 +270,48 @@ void display_init(void)
     /* Build a simple UI */
     lvgl_port_lock(0);
     lv_obj_t *scr = lv_scr_act();
-    /* Set a higher-bpp default font for the whole screen to improve text smoothing */
+    g_main_screen = scr;
+
+    /* Set a standard antialiased font. Removed subpx fonts as they look terrible when rotated. */
 #if LV_FONT_MONTSERRAT_16
     lv_obj_set_style_text_font(scr, &lv_font_montserrat_16, 0);
 #elif LV_FONT_MONTSERRAT_14
     lv_obj_set_style_text_font(scr, &lv_font_montserrat_14, 0);
 #endif
-    lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
-    lv_obj_set_style_text_color(scr, lv_color_white(), 0);
+
+    // CHANGED: Set background to white and base text to black
+    lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
+    lv_obj_set_style_text_color(scr, lv_color_black(), 0);
 
     /* Status label */
     g_status_label = lv_label_create(scr);
     lv_obj_set_width(g_status_label, LCD_H_RES - 20);
     lv_obj_set_style_text_align(g_status_label, LV_TEXT_ALIGN_CENTER, 0);
+
+    // CHANGED: Status text color to black
+    lv_obj_set_style_text_color(g_status_label, lv_color_black(), 0);
     lv_label_set_text(g_status_label, "Display initialized\nTouch the button to test");
     lv_obj_align(g_status_label, LV_ALIGN_TOP_MID, 0, 10);
-#if LV_FONT_MONTSERRAT_12_SUBPX
-    lv_obj_set_style_text_font(g_status_label, &lv_font_montserrat_12_subpx, 0);
-#elif LV_FONT_MONTSERRAT_16
-    lv_obj_set_style_text_font(g_status_label, &lv_font_montserrat_16, 0);
-#elif LV_FONT_MONTSERRAT_14
-    lv_obj_set_style_text_font(g_status_label, &lv_font_montserrat_14, 0);
-#endif
+
+    ///////////////////////////////////////////////////////////////////////////
+    //
+    //                          CREATEING UI ELEMENTS
+    //
+    ///////////////////////////////////////////////////////////////////////////
 
     /* Test button */
-    lv_obj_t *btn = lv_btn_create(scr);
-    lv_obj_set_size(btn, 140, 50);
-    lv_obj_align(btn, LV_ALIGN_CENTER, 0, 20);
-    lv_obj_t *btn_label = lv_label_create(btn);
-    lv_label_set_text(btn_label, "Touch Me");
-#if LV_FONT_MONTSERRAT_12_SUBPX
-    lv_obj_set_style_text_font(btn_label, &lv_font_montserrat_12_subpx, 0);
-#elif LV_FONT_MONTSERRAT_16
-    lv_obj_set_style_text_font(btn_label, &lv_font_montserrat_16, 0);
-#elif LV_FONT_MONTSERRAT_14
-    lv_obj_set_style_text_font(btn_label, &lv_font_montserrat_14, 0);
-#endif
+    lv_obj_t *tstbtn = lv_btn_create(scr);
+    lv_obj_set_size(tstbtn, 140, 50);
+    lv_obj_align(tstbtn, LV_ALIGN_CENTER, 0, 20);
+    lv_obj_t *tstbtnlabel = lv_label_create(tstbtn);
+    lv_label_set_text(tstbtnlabel, "OPEN TEST BUTTON");
+
+    // CHANGED: Button text color to black
+    lv_obj_set_style_text_color(tstbtnlabel, lv_color_black(), 0);
 
     /* simple event handler: increment counter and update status */
-    lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(tstbtn, tstscr, LV_EVENT_CLICKED, NULL);
+
 
     lvgl_port_unlock();
 
@@ -196,10 +321,12 @@ void display_init(void)
 void display_task(void *pvParameters)
 {
     display_init();
-    
+
     /* LVGL port creates its own internal task for rendering.
        This task just needs to stay alive to keep display running. */
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
+    // while (1)
+    // {
+    //     vTaskDelay(pdMS_TO_TICKS(1000));
+    // }
+    vTaskDelete(NULL);
 }

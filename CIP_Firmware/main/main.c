@@ -59,16 +59,16 @@ static void vTelemetryTask(void *pvParameters)
 
     ESP_LOGI(TAG, "Telemetry task started.");
 
-    while (1) {
-        // Formulate sample operational metrics
-        snprintf(buffer, sizeof(buffer), "Cycles: %lu", counter++);
+    // while (1) {
+    //     // Formulate sample operational metrics
+    //     snprintf(buffer, sizeof(buffer), "Cycles: %lu", counter++);
         
-        // Pass to our decoupled display driver
-        display_update_status(buffer);
+    //     // Pass to our decoupled display driver
+    //     display_update_status(buffer);
 
-        // Sleep to mimic data collection intervals (e.g., 250ms)
-        vTaskDelay(pdMS_TO_TICKS(250));
-    }
+    //     // Sleep to mimic data collection intervals (e.g., 250ms)
+    //     vTaskDelay(pdMS_TO_TICKS(250));
+    // }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -183,14 +183,14 @@ void IRAM_ATTR StartButtonISRHandler(void *arg)
 {
     //ESP_LOGV(TAG, "Start Button Triggered \n");
     BaseType_t xHigherPrioTaskWoken = pdFALSE;
-    xSemaphoreGiveFromISR(StartButtonSemaphore, &xHigherPrioTaskWoken);
+    //xSemaphoreGiveFromISR(StartButtonSemaphore, &xHigherPrioTaskWoken);
     portYIELD_FROM_ISR(xHigherPrioTaskWoken);
 }
 void IRAM_ATTR TestButtonISRHandler(void *arg)
 {
     //ESP_LOGV(TAG, "Test Button Triggered \n");
     BaseType_t xHigherPrioTaskWoken = pdFALSE;
-    xSemaphoreGiveFromISR(TestButtonSemaphore, &xHigherPrioTaskWoken);
+    //xSemaphoreGiveFromISR(TestButtonSemaphore, &xHigherPrioTaskWoken);
     portYIELD_FROM_ISR(xHigherPrioTaskWoken);
 }
 
@@ -290,33 +290,18 @@ void app_main(void)
         return;
     }
     ESP_LOGI(TAG, "Booting display framework...");
-    xTaskCreatePinnedToCore(
-        display_task,      // Function pointer
-        "display_tsk",    // Debug string name
-        4096,               // Stack size (bytes)
-        NULL,               // Parameters to pass
-        5,                  // RTOS Priority
-        NULL,               // Task Handle
-        1                   // Pin to Core 1
-    );
+    xTaskCreatePinnedToCore(display_task, "display_tsk", 4096, NULL, 5, NULL, 1);
+    
     // Test Tasks
-    //xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
+    xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
     //xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
     //xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
 
     //Create heater control task
     // xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
     // Create G-code parser task
-    //xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
-    xTaskCreatePinnedToCore(
-        vTelemetryTask,     // Function pointer
-        "telemetry_tsk",    // Debug string name
-        3072,               // Stack size (bytes)
-        NULL,               // Parameters to pass
-        5,                  // RTOS Priority
-        NULL,               // Task Handle
-        1                   // Pin to Core 1 (keeps core 0 free for processing/RF)
-    );
+    xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
+    //xTaskCreatePinnedToCore(vTelemetryTask, "telemetry_tsk", 3072, NULL, 5, NULL, 1);
 
     // ESP_LOGI(TAG, "All tasks created successfully");
 }
