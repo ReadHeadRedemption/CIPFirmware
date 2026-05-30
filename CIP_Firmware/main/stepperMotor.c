@@ -167,9 +167,13 @@ static esp_err_t rmt_step_burst(motor_id_t motor_id, uint32_t freq, uint32_t cou
 }
 
 // move all motors to a organized point
+// move all motors to a organized point
+// move all motors to a organized point
 esp_err_t coordinated_move(MoveCmd_t *move)
 {
     float StepPerMM[] = {xStepsPerMM, yStepsPerMM, zStepsPerMM, eStepsPerMM};
+
+    float K_FACTOR = 0.09f; 
 
     // 1. Calculate target steps
     float dx = move->target_x - motors[MOTOR_X].position;
@@ -191,11 +195,13 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     if (max_steps == 0)
         return ESP_OK;
 
-    // 2. Set Directions
+    // 2. Set Directions for X, Y, Z
     stepper_set_direction(MOTOR_X, (dx >= 0) ? 0 : 1);
     stepper_set_direction(MOTOR_Y, (dy >= 0) ? 0 : 1);
     stepper_set_direction(MOTOR_Z, (dz >= 0) ? 0 : 1);
-    stepper_set_direction(MOTOR_E, (de >= 0) ? 0 : 1);
+    
+    uint8_t e_forward_dir = (de >= 0) ? 0 : 1;
+    uint8_t e_reverse_dir = (de >= 0) ? 1 : 0;
 
     esp_rom_delay_us(5);
 
@@ -203,32 +209,29 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     uint32_t steps_taken = 0;
     static const uint32_t chunk_size = 10;
 
-    // --- TRUE KINEMATIC ACCELERATION CONFIGURATION ---
     float v_max = (float)move->feed_rate_hz;
-    float v_min = 200.0f; // Minimum jerk speed (Hz)
+    float v_min = 200.0f;
     if (v_max < v_min) {
         v_max = v_min;
     }
 
-    // Define your acceleration rate in Steps / Sec^2
-    // You may want to pass this in via MoveCmd_t eventually!
     float accel_rate = 10000.0f; 
-
-    // Calculate required steps to reach v_max using s = (v_f^2 - v_i^2) / (2a)
     uint32_t accel_steps = (uint32_t)((v_max * v_max - v_min * v_min) / (2.0f * accel_rate));
 
-    // The Triangle Check: Cap accel steps if the move is too short
     if (accel_steps > max_steps / 2)
     {
         accel_steps = max_steps / 2;
     }
     
     uint32_t decel_start_step = max_steps - accel_steps;
-    // -------------------------------------------------
 
-    rmt_symbol_word_t sym_buffer[NUM_MOTORS][chunk_size];
+    // --- MEMORY FIX: Decoupled and expanded buffer size to handle E-axis bursts ---
+    #define MAX_SYM_BUFFER 256
+    rmt_symbol_word_t sym_buffer[4][MAX_SYM_BUFFER];
+    
     static float step_error[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-    uint32_t actual_steps[4] = {0, 0, 0, 0};
+    int32_t actual_steps[4] = {0, 0, 0, 0}; 
+    float current_ideal_e = 0.0f; 
 
     // 4. Movement Loop
     while (steps_taken < max_steps)
@@ -236,28 +239,23 @@ esp_err_t coordinated_move(MoveCmd_t *move)
         uint32_t batch = (max_steps - steps_taken < chunk_size) ? (max_steps - steps_taken) : chunk_size;
         bool channel_active[4] = {false, false, false, false};
 
-        // --- DYNAMIC FEED RATE CALCULATION ---
         uint32_t current_feed_rate = move->feed_rate_hz;
 
         if (steps_taken < accel_steps)
         {
-            // RAMP UP: v = sqrt(v_i^2 + 2*a*s)
             current_feed_rate = (uint32_t)sqrtf(v_min * v_min + 2.0f * accel_rate * steps_taken);
         }
         else if (steps_taken >= decel_start_step)
         {
-            // RAMP DOWN: distance from end is (max_steps - steps_taken)
             uint32_t steps_from_end = max_steps - steps_taken;
             current_feed_rate = (uint32_t)sqrtf(v_min * v_min + 2.0f * accel_rate * steps_from_end);
         }
 
-        // Safety clamps just in case of floating point rounding errors
         if (current_feed_rate < (uint32_t)v_min) current_feed_rate = (uint32_t)v_min;
         if (current_feed_rate > move->feed_rate_hz) current_feed_rate = move->feed_rate_hz;
-        // --------------------------------------
 
-        // Step A: Queue up and start all active motors simultaneously
-        for (int i = 0; i < 4; i++)
+        // Step A1: Queue X, Y, Z
+        for (int i = 0; i < 3; i++)
         {
             if (steps[i] > 0)
             {
@@ -265,6 +263,9 @@ esp_err_t coordinated_move(MoveCmd_t *move)
                 float ideal_steps = batch * ratio;
                 float total_steps_owed = ideal_steps + step_error[i];
                 uint32_t axis_steps = (uint32_t)total_steps_owed;
+
+                // --- MEMORY FIX: Safety clamp for X, Y, Z ---
+                if (axis_steps > MAX_SYM_BUFFER) axis_steps = MAX_SYM_BUFFER;
 
                 step_error[i] = total_steps_owed - (float)axis_steps;
 
@@ -283,28 +284,78 @@ esp_err_t coordinated_move(MoveCmd_t *move)
                         for (uint32_t s = 0; s < axis_steps; s++)
                         {
                             sym_buffer[i][s] = (rmt_symbol_word_t){
-                                .duration0 = (uint16_t)ticks,
-                                .level0 = 1,
-                                .duration1 = (uint16_t)ticks,
-                                .level1 = 0};
+                                .duration0 = (uint16_t)ticks, .level0 = 1,
+                                .duration1 = (uint16_t)ticks, .level1 = 0};
                         }
 
                         rmt_transmit_config_t tx_conf = {.loop_count = 0};
-
-                        ESP_ERROR_CHECK(rmt_transmit(
-                            motor_channels[i],
-                            motor_encoders[i],
-                            sym_buffer[i],
-                            axis_steps * sizeof(rmt_symbol_word_t),
-                            &tx_conf));
-
+                        ESP_ERROR_CHECK(rmt_transmit(motor_channels[i], motor_encoders[i], sym_buffer[i], axis_steps * sizeof(rmt_symbol_word_t), &tx_conf));
                         channel_active[i] = true;
                     }
                 }
             }
         }
 
-        // Step B: Wait for all active channels to complete their chunk bursts
+        // Step A2: Queue E (Linear Advance Logic)
+        if (steps[MOTOR_E] > 0) 
+        {
+            float base_ratio = (float)(steps_taken + batch) / max_steps;
+            float kinematic_e_steps = steps[MOTOR_E] * base_ratio;
+            
+            float advance_e_steps = 0.0f;
+            if (steps_taken + batch < max_steps) {
+                advance_e_steps = K_FACTOR * (float)current_feed_rate;
+            }
+
+            float target_e_steps = kinematic_e_steps + advance_e_steps;
+            float delta_e = target_e_steps - current_ideal_e;
+            current_ideal_e = target_e_steps; 
+
+            delta_e += step_error[MOTOR_E];
+            int32_t e_steps_to_take = (int32_t)delta_e;
+            uint32_t abs_e_steps = (uint32_t)abs(e_steps_to_take);
+
+            // --- MEMORY FIX: Safety clamp for E-axis pressure bursts ---
+            if (abs_e_steps > MAX_SYM_BUFFER)
+            {
+                abs_e_steps = MAX_SYM_BUFFER;
+                e_steps_to_take = (e_steps_to_take >= 0) ? MAX_SYM_BUFFER : -MAX_SYM_BUFFER;
+            }
+
+            // Update step error AFTER clamping, so deferred steps are carried over safely
+            step_error[MOTOR_E] = delta_e - (float)e_steps_to_take;
+
+            if (abs_e_steps > 0)
+            {
+                stepper_set_direction(MOTOR_E, (e_steps_to_take >= 0) ? e_forward_dir : e_reverse_dir);
+                esp_rom_delay_us(2); 
+
+                actual_steps[MOTOR_E] += e_steps_to_take; 
+
+                uint32_t axis_freq = (uint32_t)((abs_e_steps * current_feed_rate) / batch);
+
+                if (axis_freq > 0)
+                {
+                    uint32_t ticks = 1000000 / (2 * axis_freq);
+
+                    if (ticks > 32767) ticks = 32767;
+                    if (ticks < 3) ticks = 3;
+
+                    for (uint32_t s = 0; s < abs_e_steps; s++)
+                    {
+                        sym_buffer[MOTOR_E][s] = (rmt_symbol_word_t){
+                            .duration0 = (uint16_t)ticks, .level0 = 1,
+                            .duration1 = (uint16_t)ticks, .level1 = 0};
+                    }
+
+                    rmt_transmit_config_t tx_conf = {.loop_count = 0};
+                    ESP_ERROR_CHECK(rmt_transmit(motor_channels[MOTOR_E], motor_encoders[MOTOR_E], sym_buffer[MOTOR_E], abs_e_steps * sizeof(rmt_symbol_word_t), &tx_conf));
+                    channel_active[MOTOR_E] = true;
+                }
+            }
+        }
+
+        // Step B: Wait for chunk to finish
         for (int i = 0; i < 4; i++)
         {
             if (channel_active[i])
@@ -316,7 +367,7 @@ esp_err_t coordinated_move(MoveCmd_t *move)
         steps_taken += batch;
     }
 
-    // 5. Update positions based on actual steps executed
+    // 5. Update positions
     motors[MOTOR_X].position += (actual_steps[0] / StepPerMM[0]) * ((dx >= 0) ? 1.0f : -1.0f);
     motors[MOTOR_Y].position += (actual_steps[1] / StepPerMM[1]) * ((dy >= 0) ? 1.0f : -1.0f);
     motors[MOTOR_Z].position += (actual_steps[2] / StepPerMM[2]) * ((dz >= 0) ? 1.0f : -1.0f);
@@ -575,8 +626,8 @@ esp_err_t homeMotors()
         // Check if the switch triggered during that 1mm move
         if (xSemaphoreTake(xSwitchSemaphore, 0) == pdTRUE)
         {
-            motors[MOTOR_X].position = 0.0;
-            homer.target_x = 0.0; // Reset target so Y/Z moves don't go crazy
+            motors[MOTOR_X].position = 0.0f;
+            homer.target_x = 0.0f; // Reset target so Y/Z moves don't go crazy
             axis_homed[MOTOR_X] = true;
             ESP_LOGI(TAG, "X axis homed");
         }
@@ -594,8 +645,8 @@ esp_err_t homeMotors()
 
         if (xSemaphoreTake(ySwitchSemaphore, 0) == pdTRUE)
         {
-            motors[MOTOR_Y].position = 0.0;
-            homer.target_y = 0.0;
+            motors[MOTOR_Y].position = 0.0f;
+            homer.target_y = 0.0f;
             axis_homed[MOTOR_Y] = true;
             ESP_LOGI(TAG, "Y axis homed");
         }
@@ -613,8 +664,8 @@ esp_err_t homeMotors()
 
         if (xSemaphoreTake(zSwitchSemaphore, 0) == pdTRUE)
         {
-            motors[MOTOR_Z].position = 0.0;
-            homer.target_z = 0.0;
+            motors[MOTOR_Z].position = 0.0f;
+            homer.target_z = 0.0f;
             axis_homed[MOTOR_Z] = true;
             ESP_LOGI(TAG, "Z axis homed");
         }
@@ -623,13 +674,13 @@ esp_err_t homeMotors()
     // Move to offset position
     homer.target_x = 33.0f;
     homer.target_y = 226.0f;
-    homer.target_z = 0.0f; // Keep Z at 0
+    homer.target_z = 100.0f; 
     coordinated_move(&homer);
 
     // Set actual absolute zero
     motors[MOTOR_X].position = 0;
-    motors[MOTOR_Y].position = 200;
-    motors[MOTOR_Z].position = 0;
+    motors[MOTOR_Y].position = 200.0f;
+    motors[MOTOR_Z].position = 100.0f;
 
     // initalize extruder at position 0
     motors[MOTOR_E].position = 0;

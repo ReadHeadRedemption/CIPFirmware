@@ -14,8 +14,8 @@ void parse(char *fileLocation)
 
     uint32_t feed = 0;
 
-    float scale = 1.0;
-    float eScale = 0.01;
+    float scale = 1.0f;
+    float eScale = 0.05f;
     float extrude = 0.0f;
 
     bool distMode = true;
@@ -48,8 +48,8 @@ void parse(char *fileLocation)
             ; means comment
             */
             sscanf(line, "%4s", cmd);
-            ESP_LOGI(TAG, "COMMAND: %s", cmd);
-            ESP_LOGI(TAG, "TYPE: %c", cmd[0]);
+            //ESP_LOGI(TAG, "COMMAND: %s", cmd);
+            //ESP_LOGI(TAG, "TYPE: %c", cmd[0]);
             char *commentStart = strchr(line, ';');
             if (commentStart != NULL)
             {
@@ -144,6 +144,17 @@ void parse(char *fileLocation)
                                 head.target_y = cords[Y] * scale;
                             if (coordChange[2])
                                 head.target_z = cords[Z] * scale;
+                            for (int i = 0; i < 3; i++)
+                            {
+                                (dE[i] = fabs(lastLocation[i] - cords[i]));
+                                ESP_LOGI(TAG, "dE[%d]: %.3f", i, dE[i]);
+                                ESP_LOGI(TAG, "lastLocation[%d]: %.3f", i, lastLocation[i]);
+                                ESP_LOGI(TAG, "cords[%d]: %.3f", i, cords[i]);
+                            }
+                            float extrude = (float)sqrt((dE[0] * dE[0]) +
+                                                        (dE[1] * dE[1]) +
+                                                        (dE[2] * dE[2]));
+                            head.moveE += extrude * scale * eScale;
                         }
                         else
                         {
@@ -154,15 +165,12 @@ void parse(char *fileLocation)
                             if (coordChange[2])
                                 head.target_z += cords[Z] * scale;
                         }
-                        // for (int i = 0; i < 3; i++)
-                        //     (dE[i] = fabs(lastLocation[i] - dE[i]));
-                        // float extrude = (float)sqrt((dE[0] * dE[0]) +
-                        //                             (dE[1] * dE[1]) +
-                        //                             (dE[2] * dE[2]));
-                        // head.moveE = extrude * scale * eScale;
+
+                        // Calculate the length of the move for E calculation
+
                         ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f",
                                  head.target_x, head.target_y, head.target_z);
-                        ESP_LOGI(TAG, "PUSHING HEAD %.3f MM", head.moveE);
+                        ESP_LOGI(TAG, "PUSHING HEAD TO %.3f MM", head.moveE);
                         coordinated_move(&head);
                         break;
                     default:
@@ -203,15 +211,16 @@ void parse(char *fileLocation)
                     // Set true for G2 (clockwise), false for G3 (counter-clockwise)
                     head.circleDir = (g == 2) ? true : false;
 
-                    // float lastLocation[4] = {head.target_x, head.target_y, head.center_x, head.center_y};
-                    // float dE[4] = {0.0f};
-                    // for (int i = 0; i < 4; i++)
-                    //     (dE[i] = fabs(lastLocation[i] - dE[i]));
-                    // float extrude = (float)sqrt((dE[0] * dE[0]) +
-                    //                             (dE[1] * dE[1]) +
-                    //                             (dE[2] * dE[2]) +
-                    //                             (dE[2] * dE[2]));
-                    // head.moveE = extrude * scale * eScale;
+                    // Setting extrude based on linear distance of the arc move
+                    float lastLocation[4] = {head.target_x, head.target_y, head.center_x, head.center_y};
+                    float dE[4] = {0.0f};
+                    for (int i = 0; i < 4; i++)
+                        (dE[i] = fabs(lastLocation[i] - cords[i]));
+                    float extrude = (float)sqrt((dE[0] * dE[0]) +
+                                                (dE[1] * dE[1]) +
+                                                (dE[2] * dE[2]) +
+                                                (dE[3] * dE[3]));
+                    head.moveE = extrude * scale * eScale;
                     if (coordChange[0])
                         head.target_x = cords[X] * scale;
                     if (coordChange[1])

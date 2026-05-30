@@ -1,15 +1,5 @@
 // Simple LVGL + ILI9341 + XPT2046 display driver for testing
 #include "display.h"
-#include "esp_lvgl_port.h"
-#include "esp_lcd_panel_io.h"
-#include "esp_lcd_panel_vendor.h"
-#include "esp_lcd_ili9341.h"
-#include "esp_lcd_touch_xpt2046.h"
-#include "driver/spi_master.h"
-#include "driver/gpio.h"
-#include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 static const char *TAG = "DISPLAY";
 
@@ -39,6 +29,16 @@ static void home_screen_cb(lv_event_t *e)
     lvgl_port_unlock();
 }
 
+MoveCmd_t head = {
+    .target_x = 0.0f,
+    .target_y = 0.0f,
+    .target_z = 0.0f,
+    .moveE = 0.0f,
+    .center_x = 0.0f,
+    .center_y = 0.0f,
+    .circleDir = false,
+    .feed_rate_hz = 5000};
+
 ///////////////////////////////////////////////////////////////////////////
 //
 //                          FILE SELECT SCREEN
@@ -54,15 +54,7 @@ static void tstbtn_event_cb(lv_event_t *e)
 {
     if (!lvgl_port_lock(0))
         return;
-    static int cnt = 0;
-    char buf[64];
-    snprintf(buf, sizeof(buf), " Test Button pressed %d times", ++cnt);
-    lv_label_set_text(g_status_label, buf);
-    /* Signal main/tasks via semaphore so other tasks can start */
-    if (TestButtonSemaphore)
-    {
-        xSemaphoreGive(TestButtonSemaphore);
-    }
+    homeMotors();
     lvgl_port_unlock();
 }
 
@@ -80,6 +72,78 @@ static void parsebtn_event_cb(lv_event_t *e)
     lvgl_port_unlock();
 }
 
+static void xPos_event_cb(lv_event_t *e)
+{
+    if (!lvgl_port_lock(0))
+        return;
+    char buf[64];
+    snprintf(buf, sizeof(buf), "MOVE +10 X");
+    head.target_x += 10.0f;
+    coordinated_move(&head);
+    lv_label_set_text(g_status_label, buf);
+    lvgl_port_unlock();
+}
+
+static void xNeg_event_cb(lv_event_t *e)
+{
+    if (!lvgl_port_lock(0))
+        return;
+    char buf[64];
+    snprintf(buf, sizeof(buf), "MOVE -10 X");
+    head.target_x -= 10.0f;
+    coordinated_move(&head);
+    lv_label_set_text(g_status_label, buf);
+    lvgl_port_unlock();
+}
+
+static void yPos_event_cb(lv_event_t *e)
+{
+    if (!lvgl_port_lock(0))
+        return;
+    char buf[64];
+    snprintf(buf, sizeof(buf), "MOVE +10 Y");
+    head.target_y += 10.0f;
+    coordinated_move(&head);
+    lv_label_set_text(g_status_label, buf);
+    lvgl_port_unlock();
+}
+
+static void yNeg_event_cb(lv_event_t *e)
+{
+    if (!lvgl_port_lock(0))
+        return;
+    char buf[64];
+    snprintf(buf, sizeof(buf), "MOVE -10 Y");
+    head.target_y -= 10.0f;
+    coordinated_move(&head);
+    lv_label_set_text(g_status_label, buf);
+    lvgl_port_unlock();
+}
+
+static void zPos_event_cb(lv_event_t *e)
+{
+    if (!lvgl_port_lock(0))
+        return;
+    char buf[64];
+    snprintf(buf, sizeof(buf), "MOVE +10 Z");
+    head.target_z += 10.0f;
+    coordinated_move(&head);
+    lv_label_set_text(g_status_label, buf);
+    lvgl_port_unlock();
+}
+
+static void zNeg_event_cb(lv_event_t *e)
+{
+    if (!lvgl_port_lock(0))
+        return;
+    char buf[64];
+    snprintf(buf, sizeof(buf), "MOVE -10 Z");
+    head.target_z -= 10.0f;
+    coordinated_move(&head);
+    lv_label_set_text(g_status_label, buf);
+    lvgl_port_unlock();
+}
+
 void test_screen(void)
 {
     if (!lvgl_port_lock(0))
@@ -91,11 +155,11 @@ void test_screen(void)
     lv_scr_load(scr);
 
     /* Set a standard antialiased font. Removed subpx fonts as they look terrible when rotated. */
-#if LV_FONT_MONTSERRAT_16
-    lv_obj_set_style_text_font(scr, &lv_font_montserrat_16, 0);
-#elif LV_FONT_MONTSERRAT_14
+    // #if LV_FONT_MONTSERRAT_16
+    //     lv_obj_set_style_text_font(scr, &lv_font_montserrat_16, 0);
+    // #elif LV_FONT_MONTSERRAT_14
     lv_obj_set_style_text_font(scr, &lv_font_montserrat_14, 0);
-#endif
+    // #endif
 
     lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
     lv_obj_set_style_text_color(scr, lv_color_black(), 0);
@@ -104,36 +168,85 @@ void test_screen(void)
     lv_obj_set_width(status_label, LCD_H_RES - 20);
     lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(status_label, lv_color_black(), 0);
-    lv_label_set_text(status_label, "Test screen\nPress BACK to return");
+    lv_label_set_text(status_label, "Test screen\nPress HOME to return");
     lv_obj_align(status_label, LV_ALIGN_TOP_MID, 0, 10);
 
     // Create Back Button
 
     lv_obj_t *back_btn = lv_btn_create(scr);
-    lv_obj_set_size(back_btn, 120, 40);
-    lv_obj_align(back_btn, LV_ALIGN_CENTER, 0, -60);
+    lv_obj_set_size(back_btn, 50, 40);
+    lv_obj_align(back_btn, LV_ALIGN_CENTER, 60, -60);
     lv_obj_t *back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, "BACK");
+    lv_label_set_text(back_label, "HOME");
     lv_obj_set_style_text_color(back_label, lv_color_black(), 0);
     lv_obj_add_event_cb(back_btn, home_screen_cb, LV_EVENT_CLICKED, NULL);
 
     // Create Parseing Gcode Button
     lv_obj_t *parse_btn = lv_btn_create(scr);
-    lv_obj_set_size(parse_btn, 120, 40);
-    lv_obj_align(parse_btn, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_size(parse_btn, 100, 40);
+    lv_obj_align(parse_btn, LV_ALIGN_CENTER, -50, 0);
     lv_obj_t *parse_label = lv_label_create(parse_btn);
-    lv_label_set_text(parse_label, "Parse Sample Gcode");
+    lv_label_set_text(parse_label, "Parse \nGcode");
     lv_obj_set_style_text_color(parse_label, lv_color_black(), 0);
     lv_obj_add_event_cb(parse_btn, parsebtn_event_cb, LV_EVENT_CLICKED, NULL);
 
-    // Create Increment Button 
+    // Create Test Button
     lv_obj_t *tst_btn = lv_btn_create(scr);
-    lv_obj_set_size(tst_btn, 120, 40);
-    lv_obj_align(tst_btn, LV_ALIGN_CENTER, 0, 60);
+    lv_obj_set_size(tst_btn, 100, 40);
+    lv_obj_align(tst_btn, LV_ALIGN_CENTER, 50, 0);
     lv_obj_t *tst_label = lv_label_create(tst_btn);
-    lv_label_set_text(tst_label, "Test Button");
+    lv_label_set_text(tst_label, "TEST \nHOMING");
     lv_obj_set_style_text_color(tst_label, lv_color_black(), 0);
     lv_obj_add_event_cb(tst_btn, tstbtn_event_cb, LV_EVENT_CLICKED, NULL);
+
+    // Create Increment Buttons
+    lv_obj_t *posXmove = lv_btn_create(scr);
+    lv_obj_set_size(posXmove, 60, 40);
+    lv_obj_align(posXmove, LV_ALIGN_CENTER, -70, 60);
+    lv_obj_t *posXlabel = lv_label_create(posXmove);
+    lv_label_set_text(posXlabel, "MOVE \n+10X");
+    lv_obj_set_style_text_color(posXlabel, lv_color_black(), 0);
+    lv_obj_add_event_cb(posXmove, xPos_event_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *negXmove = lv_btn_create(scr);
+    lv_obj_set_size(negXmove, 60, 40);
+    lv_obj_align(negXmove, LV_ALIGN_CENTER, -70, 110);
+    lv_obj_t *negXlabel = lv_label_create(negXmove);
+    lv_label_set_text(negXlabel, "MOVE \n-10X");
+    lv_obj_set_style_text_color(negXlabel, lv_color_black(), 0);
+    lv_obj_add_event_cb(negXmove, xNeg_event_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *posYmove = lv_btn_create(scr);
+    lv_obj_set_size(posYmove, 60, 40);
+    lv_obj_align(posYmove, LV_ALIGN_CENTER, 0, 60);
+    lv_obj_t *posYlabel = lv_label_create(posYmove);
+    lv_label_set_text(posYlabel, "MOVE \n+10Y");
+    lv_obj_set_style_text_color(posYlabel, lv_color_black(), 0);
+    lv_obj_add_event_cb(posYmove, yPos_event_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *negYmove = lv_btn_create(scr);
+    lv_obj_set_size(negYmove, 60, 40);
+    lv_obj_align(negYmove, LV_ALIGN_CENTER, 0, 110);
+    lv_obj_t *negYlabel = lv_label_create(negYmove);
+    lv_label_set_text(negYlabel, "MOVE \n-10Y");
+    lv_obj_set_style_text_color(negYlabel, lv_color_black(), 0);
+    lv_obj_add_event_cb(negYmove, yNeg_event_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *posZmove = lv_btn_create(scr);
+    lv_obj_set_size(posZmove, 60, 40);
+    lv_obj_align(posZmove, LV_ALIGN_CENTER, 70, 60);
+    lv_obj_t *posZlabel = lv_label_create(posZmove);
+    lv_label_set_text(posZlabel, "MOVE \n+10Z");
+    lv_obj_set_style_text_color(posZlabel, lv_color_black(), 0);
+    lv_obj_add_event_cb(posZmove, zPos_event_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *negZmove = lv_btn_create(scr);
+    lv_obj_set_size(negZmove, 60, 40);
+    lv_obj_align(negZmove, LV_ALIGN_CENTER, 70, 110);
+    lv_obj_t *negZlabel = lv_label_create(negZmove);
+    lv_label_set_text(negZlabel, "MOVE \n-10Z");
+    lv_obj_set_style_text_color(negZlabel, lv_color_black(), 0);
+    lv_obj_add_event_cb(negZmove, zNeg_event_cb, LV_EVENT_CLICKED, NULL);
 
     lvgl_port_unlock();
 }
@@ -160,7 +273,7 @@ void display_update_status(const char *text)
 //
 ///////////////////////////////////////////////////////////////////////////
 
-static void tstscr (lv_event_t *e)
+static void tstscr(lv_event_t *e)
 {
     test_screen();
 }
@@ -215,7 +328,7 @@ void display_init(void)
         .rst_gpio_num = reset,
         .int_gpio_num = touchInterrupt,
         .levels = {.reset = 0, .interrupt = 0},
-        .flags = {.swap_xy = 0, .mirror_x = 1, .mirror_y = 1},
+        .flags = {.swap_xy = 0, .mirror_x = 0, .mirror_y = 1},
     };
     ESP_ERROR_CHECK(esp_lcd_touch_new_spi_xpt2046(tp_io, &tp_cfg, &touch_handle));
 
@@ -311,7 +424,6 @@ void display_init(void)
 
     /* simple event handler: increment counter and update status */
     lv_obj_add_event_cb(tstbtn, tstscr, LV_EVENT_CLICKED, NULL);
-
 
     lvgl_port_unlock();
 

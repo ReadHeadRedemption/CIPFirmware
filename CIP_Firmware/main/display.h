@@ -1,10 +1,16 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-#include "esp_log.h"
-#include "pins.h"
 #include "common.h"
 #include "esp_lcd_ili9341.h"
+#include "esp_lcd_touch_xpt2046.h"
+#include "esp_lvgl_port.h"
+#include "esp_lcd_panel_io.h"
+#include "esp_lcd_panel_vendor.h"
+#include "driver/spi_master.h"
+
+#include "stepperMotor.h"
+
 
 #ifdef __cplusplus
 extern "C" {

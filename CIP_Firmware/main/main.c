@@ -47,7 +47,6 @@ void parserTask(void *pvParameters)
             ESP_LOGI(TAG, "Starting G-code parser task...");
             parse(spiffs_file);
             ESP_LOGI(TAG, "G-code parsing completed");
-            vTaskDelete(NULL);
         }
     }
 }
