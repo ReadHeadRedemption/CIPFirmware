@@ -173,7 +173,7 @@ esp_err_t coordinated_move(MoveCmd_t *move)
 {
     float StepPerMM[] = {xStepsPerMM, yStepsPerMM, zStepsPerMM, eStepsPerMM};
 
-    float K_FACTOR = 0.09f; 
+    float K_FACTOR = 0.01f; 
 
     // 1. Calculate target steps
     float dx = move->target_x - motors[MOTOR_X].position;

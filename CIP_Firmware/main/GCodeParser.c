@@ -15,7 +15,7 @@ void parse(char *fileLocation)
     uint32_t feed = 0;
 
     float scale = 1.0f;
-    float eScale = 0.05f;
+    float eScale = 0.006f;
     float extrude = 0.0f;
 
     bool distMode = true;
@@ -48,8 +48,7 @@ void parse(char *fileLocation)
             ; means comment
             */
             sscanf(line, "%4s", cmd);
-            //ESP_LOGI(TAG, "COMMAND: %s", cmd);
-            //ESP_LOGI(TAG, "TYPE: %c", cmd[0]);
+            ESP_LOGI(TAG, "COMMAND: %s", cmd);
             char *commentStart = strchr(line, ';');
             if (commentStart != NULL)
             {
@@ -73,11 +72,13 @@ void parse(char *fileLocation)
                     {
                         sscanf(p + 1, "%f", &cords[X]); // Use %f for float!
                         coordChange[0] = true;
+                        ESP_LOGI(TAG, "Parsed X: %.3f", cords[X]);
                     }
                     // Check Y
                     if ((p = strchr(line, 'Y')) != NULL)
                     {
                         sscanf(p + 1, "%f", &cords[Y]);
+                        ESP_LOGI(TAG, "Parsed Y: %.3f", cords[Y]);
                         coordChange[1] = true;
                     }
                     // Check Z
@@ -85,12 +86,14 @@ void parse(char *fileLocation)
                     {
                         coordChange[2] = true;
                         sscanf(p + 1, "%f", &cords[Z]);
+                        ESP_LOGI(TAG, "Parsed Z: %.3f", cords[Z]);
                     }
                     // Check F
                     if ((p = strchr(line, 'F')) != NULL)
                     {
                         sscanf(p + 1, "%ld", &feed);
                         head.feed_rate_hz = feed;
+                        ESP_LOGI(TAG, "Parsed F: %ld", feed);
                     }
                     int g = atoi(cmd + 1);
                     switch (g)
@@ -99,43 +102,34 @@ void parse(char *fileLocation)
                         ESP_LOGI(TAG, "CALLING G0");
                         if (distMode)
                         {
-                            if (coordChange[0])
-                                head.target_x = cords[X] * scale;
-                            if (coordChange[1])
-                                head.target_y = cords[Y] * scale;
-                            if (coordChange[2])
-                                head.target_z = cords[Z] * scale;
+                            if (coordChange[0])head.target_x = cords[X] * scale;
+                            if (coordChange[1])head.target_y = cords[Y] * scale;
+                            if (coordChange[2])head.target_z = cords[Z] * scale;
                         }
                         else
                         {
-                            if (coordChange[0])
-                                head.target_x += cords[X] * scale;
-                            if (coordChange[1])
-                                head.target_y += cords[Y] * scale;
-                            if (coordChange[2])
-                                head.target_z += cords[Z] * scale;
+                            if (coordChange[0])head.target_x += cords[X] * scale;
+                            if (coordChange[1])head.target_y += cords[Y] * scale;
+                            if (coordChange[2])head.target_z += cords[Z] * scale;
                         }
                         ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f",
-                                 &head.target_x, &head.target_y, &head.target_z);
+                                head.target_x, head.target_y, head.target_z);
                         coordinated_move(&head);
                         break;
                     case 1: // linear movement
                         ESP_LOGI(TAG, "CALLING G1");
                         float lastLocation[3] = {head.target_x, head.target_y, head.target_z};
                         float dE[3] = {0.0f};
-
                         if ((p = strchr(line, 'F')) != NULL)
                         {
                             sscanf(p + 1, "%ld", &feed);
                             head.feed_rate_hz = feed;
                         }
-
                         if ((p = strchr(line, 'E')) != NULL)
                         {
                             sscanf(p + 1, "%f", &extrude);
                             head.moveE += extrude * scale * eScale;
                         }
-
                         if (distMode)
                         {
                             if (coordChange[0])
@@ -147,9 +141,9 @@ void parse(char *fileLocation)
                             for (int i = 0; i < 3; i++)
                             {
                                 (dE[i] = fabs(lastLocation[i] - cords[i]));
-                                ESP_LOGI(TAG, "dE[%d]: %.3f", i, dE[i]);
-                                ESP_LOGI(TAG, "lastLocation[%d]: %.3f", i, lastLocation[i]);
-                                ESP_LOGI(TAG, "cords[%d]: %.3f", i, cords[i]);
+                                //ESP_LOGI(TAG, "dE[%d]: %.3f", i, dE[i]);
+                                //ESP_LOGI(TAG, "lastLocation[%d]: %.3f", i, lastLocation[i]);
+                                //ESP_LOGI(TAG, "cords[%d]: %.3f", i, cords[i]);
                             }
                             float extrude = (float)sqrt((dE[0] * dE[0]) +
                                                         (dE[1] * dE[1]) +
@@ -171,6 +165,8 @@ void parse(char *fileLocation)
                         ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f",
                                  head.target_x, head.target_y, head.target_z);
                         ESP_LOGI(TAG, "PUSHING HEAD TO %.3f MM", head.moveE);
+                        coordinated_move(&head);
+                        head.moveE -= extrude * scale * eScale * 0.01f;
                         coordinated_move(&head);
                         break;
                     default:

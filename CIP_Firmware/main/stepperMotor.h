@@ -13,7 +13,7 @@
 #define xStepsPerMM  ((MotorStepsPerRev * MicroStepping) / (20.0f * 2.0f))   // 20 tooth gear w/ 2mm belt pitch
 #define yStepsPerMM  ((MotorStepsPerRev * MicroStepping) / (20.0f * 2.0f))
 #define zStepsPerMM  ((MotorStepsPerRev * MicroStepping) / 8.0f)             // 8mm shift per revolution
-#define eStepsPerMM  ((MotorStepsPerRev * MicroStepping) / 8.0f)
+#define eStepsPerMM  ((MotorStepsPerRev * MicroStepping) / 1.0f)
 
 // Motor identifiers
 typedef enum {
