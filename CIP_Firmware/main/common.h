@@ -16,6 +16,27 @@
 
 
 // Global Variables
+// Struct to define a multi-axis move command
+
+typedef struct {
+    //Cartesian cordinates that the movement command will try to target
+    float target_x;
+    float target_y;
+    float target_z;
+
+    // how far the lead screw should push ink out
+    float moveE;
+
+    //Polar cordinate information for arc movement
+    float center_x;
+    float center_y;
+    bool circleDir;
+
+    uint32_t feed_rate_hz; // Max speed of the lead axis
+} MoveCmd_t;
+
+extern MoveCmd_t head;
+
 // Semaphores
 extern SemaphoreHandle_t xSwitchSemaphore;
 extern SemaphoreHandle_t ySwitchSemaphore;

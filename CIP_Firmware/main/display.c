@@ -29,16 +29,7 @@ static void home_screen_cb(lv_event_t *e)
     lvgl_port_unlock();
 }
 
-MoveCmd_t head = {
-    .target_x = 0.0f,
-    .target_y = 0.0f,
-    .target_z = 0.0f,
-    .moveE = 0.0f,
-    .center_x = 0.0f,
-    .center_y = 0.0f,
-    .circleDir = false,
-    .feed_rate_hz = 5000};
-
+ 
 ///////////////////////////////////////////////////////////////////////////
 //
 //                          FILE SELECT SCREEN

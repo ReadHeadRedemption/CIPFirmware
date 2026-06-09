@@ -10,7 +10,8 @@
 #include "freertos/semphr.h"
 #include "common.h"
 #include "stepperMotor.h"
-void parse(char *fileLocation);
+
+extern MoveCmd_t head;
 
 typedef enum {
     X = 0,
@@ -18,6 +19,11 @@ typedef enum {
     Z = 2,
     E = 3
 } coordinate_t;
+
+
+void readParseFile(char *fileLocation);
+void parse(char *line);
+
 
 
 #endif

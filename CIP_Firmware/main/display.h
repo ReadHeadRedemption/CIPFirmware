@@ -11,6 +11,8 @@
 
 #include "stepperMotor.h"
 
+extern MoveCmd_t head;
+
 
 #ifdef __cplusplus
 extern "C" {

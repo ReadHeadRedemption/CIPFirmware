@@ -9,6 +9,8 @@
 #include "driver/adc.h"
 #include "esp_log.h"
 #include "pins.h"
+#include "esp_console.h"
+#include "linenoise/linenoise.h"
 
 //Include RTOS Headers for real time management of the firmware
 #include "freertos/FreeRTOS.h"

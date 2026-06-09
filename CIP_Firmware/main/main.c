@@ -45,7 +45,7 @@ void parserTask(void *pvParameters)
         if (xSemaphoreTake(StartButtonSemaphore, portMAX_DELAY) == pdTRUE)
         {
             ESP_LOGI(TAG, "Starting G-code parser task...");
-            parse(spiffs_file);
+            readParseFile(spiffs_file);
             ESP_LOGI(TAG, "G-code parsing completed");
         }
     }
@@ -68,6 +68,35 @@ static void vTelemetryTask(void *pvParameters)
     //     // Sleep to mimic data collection intervals (e.g., 250ms)
     //     vTaskDelay(pdMS_TO_TICKS(250));
     // }
+}
+
+static void console_task(void *arg) {
+    (void)arg;
+    char *line;
+
+    while (1) {
+        // printf("> ");
+        fflush(stdout);
+        // Read line with prompt
+        line = linenoise("esp> ");
+        if (line == NULL) {
+            // Free buffer
+            linenoiseFree(line);
+            continue; // Empty line
+        }
+        // Process line
+        if (strcmp(line, "home") == 0) {
+            homeMotors();
+        } else if (strcmp(line, "test") == 0) {
+            ESP_LOGI(TAG, "Test command received");
+        } else {
+           parse(line);
+        }
+        // Add to history
+        linenoiseHistoryAdd(line);
+        // Free buffer
+        linenoiseFree(line);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -203,6 +232,11 @@ void app_main(void)
 {
     ESP_LOGI(TAG, "CIP Firmware starting...");
 
+    esp_console_repl_t *repl = NULL;
+    esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
+    esp_console_dev_uart_config_t uart_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
+    esp_console_new_repl_uart(&uart_config, &repl_config, &repl);
+
     // Initialize SPIFFS for file storage (for testing G-code parsing)
     esp_vfs_spiffs_conf_t conf = {
         .base_path = "/spiffs",
@@ -295,6 +329,8 @@ void app_main(void)
     xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
     //xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
     //xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
+    xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
+    
 
     //Create heater control task
     // xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);

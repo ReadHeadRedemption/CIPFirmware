@@ -1,8 +1,8 @@
 #ifndef STEPPER_MOTOR_H
 #define STEPPER_MOTOR_H
 
-#include "driver/mcpwm_prelude.h"
 #include "common.h"
+#include "driver/mcpwm_prelude.h"
 #include "pins.h"
 
 
@@ -36,24 +36,6 @@ typedef struct {
     
 
 } motor_config_t;
-
-// Struct to define a multi-axis move command
-typedef struct {
-    //Cartiezian cordinates that the movement command will try to target
-    float target_x;
-    float target_y;
-    float target_z;
-
-    // how far the lead screw should push ink out
-    float moveE;
-
-    //Polar cordinate information for arc movement
-    float center_x;
-    float center_y;
-    bool circleDir;
-
-    uint32_t feed_rate_hz; // Max speed of the lead axis
-} MoveCmd_t;
 
 
 /**
