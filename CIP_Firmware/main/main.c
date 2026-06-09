@@ -156,14 +156,6 @@ void buttonTest(void *pvParameters)
 {
     while (1)
     {
-        if (xSemaphoreTake(TestButtonSemaphore, pdMS_TO_TICKS(10)) == pdTRUE)
-        {
-            ESP_LOGI(TAG, "Test Button Pressed");
-        }
-        if (xSemaphoreTake(StartButtonSemaphore, pdMS_TO_TICKS(10)) == pdTRUE)
-        {
-            ESP_LOGI(TAG, "Start Button Pressed");
-        }
         if ((xSemaphoreTake(xSwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE))
         {
             ESP_LOGI(TAG, "X Switch Pressed");
@@ -207,20 +199,6 @@ void IRAM_ATTR zISRHandler(void *arg)
     portYIELD_FROM_ISR(xHigherPrioTaskWoken);
 }
 
-void IRAM_ATTR StartButtonISRHandler(void *arg)
-{
-    //ESP_LOGV(TAG, "Start Button Triggered \n");
-    BaseType_t xHigherPrioTaskWoken = pdFALSE;
-    //xSemaphoreGiveFromISR(StartButtonSemaphore, &xHigherPrioTaskWoken);
-    portYIELD_FROM_ISR(xHigherPrioTaskWoken);
-}
-void IRAM_ATTR TestButtonISRHandler(void *arg)
-{
-    //ESP_LOGV(TAG, "Test Button Triggered \n");
-    BaseType_t xHigherPrioTaskWoken = pdFALSE;
-    //xSemaphoreGiveFromISR(TestButtonSemaphore, &xHigherPrioTaskWoken);
-    portYIELD_FROM_ISR(xHigherPrioTaskWoken);
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -258,9 +236,6 @@ void app_main(void)
     ySwitchSemaphore = xSemaphoreCreateBinary();
     zSwitchSemaphore = xSemaphoreCreateBinary();
     eSwitchSemaphore = xSemaphoreCreateBinary();
-    StartButtonSemaphore = xSemaphoreCreateBinary();
-    TestButtonSemaphore = xSemaphoreCreateBinary();
-
     ///////////////////////////////////////////////////////////////////////////////
     //
     //                          PIN CONFIGURATIONS
@@ -286,7 +261,7 @@ void app_main(void)
     gpio_config_t inputPins = {
         .pin_bit_mask = (1ULL << xSwitch) | (1ULL << ySwitch) |
                         (1ULL << zSwitch) |
-                        (1ULL << StartButton) | (1ULL << TestButton),
+                        (1ULL << HEAD_ID_0) | (1ULL << HEAD_ID_1),
         .mode = GPIO_MODE_INPUT,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .pull_up_en = GPIO_PULLUP_ENABLE,
@@ -302,10 +277,7 @@ void app_main(void)
     gpio_isr_handler_add(ySwitch, yISRHandler, NULL);
     gpio_set_intr_type(zSwitch, GPIO_INTR_POSEDGE);
     gpio_isr_handler_add(zSwitch, zISRHandler, NULL);
-    gpio_set_intr_type(StartButton, GPIO_INTR_NEGEDGE);
-    gpio_isr_handler_add(StartButton, StartButtonISRHandler, NULL);
-    gpio_set_intr_type(TestButton, GPIO_INTR_NEGEDGE);
-    gpio_isr_handler_add(TestButton, TestButtonISRHandler, NULL);
+
 
     ESP_LOGI(TAG, "GPIO interrupts configured successfully");
 

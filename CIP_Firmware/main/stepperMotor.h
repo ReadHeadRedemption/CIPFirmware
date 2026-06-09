@@ -83,4 +83,9 @@ esp_err_t circular_move(MoveCmd_t *arc);
  */
 esp_err_t homeMotors();
 
+/**
+ * @brief Updates the motor configuration to the current tool that is used
+ */
+esp_err_t changeTool(int tool);
+
 #endif // STEPPER_MOTOR_H

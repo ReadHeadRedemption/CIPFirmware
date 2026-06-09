@@ -11,7 +11,6 @@ float extrude = 0.0f;
 
 bool distMode = true;
 
-
 // Temp file location to load into the esp32
 void readParseFile(char *fileLocation)
 {
@@ -57,7 +56,7 @@ void parse(char *line)
     {
         *commentStart = '\0';
     }
-    else if (cmd[0] == 'F')
+    if (cmd[0] == 'F')
     {
         if ((p = strchr(line, 'F')) != NULL)
         {
@@ -275,6 +274,34 @@ void parse(char *line)
     }
     else if (cmd[0] == 'M')
     {
+    }
+    else if (cmd[0] == 'T') // tool change commands
+    {
+        head.target_x = 0 * scale;
+        head.target_y = 0 * scale;
+        head.target_z = 100 * scale;
+        coordinated_move(&head);
+        int tool = 0;
+        if ((p = strchr(line, 'T')) != NULL)
+        {
+            sscanf(p + 1, "%d", &tool);
+        }
+        char *toolIndex[] = {"Conductive Ink", "Insulator Ink", "Camera", NULL};
+        ESP_LOGI(TAG, "CALLING T: TOOL CHANGE TO %s", toolIndex[tool]);
+        changeTool(tool);
+        int id1 = gpio_get_level(HEAD_ID_0); // read tool ID pin
+        int id2 = gpio_get_level(HEAD_ID_1); // read tool ID pin
+        // Delay until the tool ID matches correct tool
+        do
+        {
+            id1 = gpio_get_level(HEAD_ID_0);
+            id2 = gpio_get_level(HEAD_ID_1);
+
+            if (tool != (1 << (id1 + id2)))
+            {
+                vTaskDelay(pdMS_TO_TICKS(10)); // FreeRTOS 10ms delay to let other tasks run
+            }
+        } while (tool != (1 << (id1 + id2)));
     }
 }
 /*

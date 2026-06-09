@@ -165,15 +165,22 @@ static esp_err_t rmt_step_burst(motor_id_t motor_id, uint32_t freq, uint32_t cou
 
     return rmt_transmit(motor_channels[motor_id], motor_encoders[motor_id], &symbol, 1, &tx_config);
 }
+float K_FACTOR = 0.01f; 
 
-// move all motors to a organized point
-// move all motors to a organized point
+esp_err_t changeTool(int tool)
+{
+    // Condutive Ink, Insulator Ink, Camera
+    float toolKval[] = {0.01f, 0.02f, 0.0f};
+    K_FACTOR = toolKval[tool]; 
+    return ESP_OK;
+}
+
 // move all motors to a organized point
 esp_err_t coordinated_move(MoveCmd_t *move)
 {
     float StepPerMM[] = {xStepsPerMM, yStepsPerMM, zStepsPerMM, eStepsPerMM};
 
-    float K_FACTOR = 0.01f; 
+    
 
     // 1. Calculate target steps
     float dx = move->target_x - motors[MOTOR_X].position;
