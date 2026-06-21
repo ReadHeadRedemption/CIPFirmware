@@ -14,5 +14,6 @@
     "--query-driver=**",
     "--compile-commands-dir=c:\\Users\\ethan\\Documents\\GitHub\\CIPFirmware\\CIP_Firmware\\build"
   ],
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "idf.monitorPort": "COM5"
 }

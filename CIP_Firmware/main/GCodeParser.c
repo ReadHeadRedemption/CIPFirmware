@@ -6,8 +6,9 @@ static const char *TAG = "GCODE_PARSER";
 uint32_t feed = 0;
 
 float scale = 1.0f;
-float eScale = 0.006f;
+float eScale = 0.00005f;
 float extrude = 0.0f;
+float total_extruded = 0.0f;
 
 bool distMode = true;
 
@@ -23,9 +24,9 @@ void readParseFile(char *fileLocation)
 
     uint32_t feed = 0;
 
-    float scale = 1.0f;
-    float eScale = 0.006f;
-    float extrude = 0.0f;
+    // float scale = 1.0f;
+    // float eScale = 0.006f;
+    // float extrude = 0.0f;
 
     bool distMode = true;
     MoveCmd_t head;
@@ -44,6 +45,24 @@ void readParseFile(char *fileLocation)
     else
     {
         ESP_LOGI(TAG, "Successfully opened G-code file: %s", fileLocation);
+
+        char up[] = "G0 Z5.5 F20000";
+
+        char mini_extrude[] = "G1 E40 F200";
+        // char down[] = "G0 Z0.5";
+
+        // TEMPORARY CODE FOR INITIAL EXTRUSION
+        parse(up); 
+        parse(mini_extrude);
+        // parse(mini_extrude);
+        for (int i = 0; i < 10; i++)
+        {
+            parse(mini_extrude);
+            vTaskDelay(pdMS_TO_TICKS(2500));
+        }
+        // vTaskDelay(pdMS_TO_TICKS(10000));
+        // parse(down);
+
         while (fgets(line, sizeof(line), file))
         {
             parse(line);
@@ -53,7 +72,9 @@ void readParseFile(char *fileLocation)
 }
 
 void parse(char *line)
-{
+{    
+    bool pullback = true;
+    
     char *p;
     char cmd[4] = "";
     float cords[3] = {0.0f, 0.0f, 0.0f};
@@ -109,18 +130,25 @@ void parse(char *line)
                 sscanf(p + 1, "%f", &cords[Z]);
                 ESP_LOGI(TAG, "Parsed Z: %.3f", cords[Z]);
             }
-            // Check F
-            if ((p = strchr(line, 'F')) != NULL)
+            // Check do pull-back
+            if ((p = strchr(line, 'N')) != NULL)
             {
-                sscanf(p + 1, "%ld", &feed);
-                head.feed_rate_hz = feed;
-                ESP_LOGI(TAG, "Parsed F: %ld", feed);
+                pullback = false;
+                ESP_LOGI(TAG, "Pullback");
             }
             int g = atoi(cmd + 1);
             switch (g)
             {
             case 0: // rapid movement
                 ESP_LOGI(TAG, "CALLING G0");
+                head.feed_rate_hz = 5000;
+                // Check F
+                if ((p = strchr(line, 'F')) != NULL)
+                {
+                    sscanf(p + 1, "%ld", &feed);
+                    head.feed_rate_hz = feed;
+                    ESP_LOGI(TAG, "Parsed G0 F: %ld", feed);
+                }
                 if (distMode)
                 {
                     if (coordChange[0])
@@ -151,20 +179,25 @@ void parse(char *line)
                 {
                     sscanf(p + 1, "%ld", &feed);
                     head.feed_rate_hz = feed;
+                    ESP_LOGI(TAG, "Parsed G1 F: %ld", feed);
                 }
                 if ((p = strchr(line, 'E')) != NULL)
                 {
                     sscanf(p + 1, "%f", &extrude);
                     head.moveE += extrude * scale * eScale;
-                }
-                if (distMode)
-                {
+                    head.feed_rate_hz = 200;
+                    coordinated_move(&head);
+                    head.feed_rate_hz = 500;
                     if (coordChange[0])
-                        head.target_x = cords[X] * scale;
+                        head.target_x += cords[X] * scale;
                     if (coordChange[1])
-                        head.target_y = cords[Y] * scale;
+                        head.target_y += cords[Y] * scale;
                     if (coordChange[2])
-                        head.target_z = cords[Z] * scale;
+                        head.target_z += cords[Z] * scale;
+                    pullback = false;
+                }
+                else if (distMode)
+                {
                     for (int i = 0; i < 3; i++)
                     {
                         (dE[i] = fabs(lastLocation[i] - cords[i]));
@@ -172,33 +205,53 @@ void parse(char *line)
                         // ESP_LOGI(TAG, "lastLocation[%d]: %.3f", i, lastLocation[i]);
                         // ESP_LOGI(TAG, "cords[%d]: %.3f", i, cords[i]);
                     }
-                    float extrude = (float)sqrt((dE[0] * dE[0]) +
+                    extrude = (float)sqrt((dE[0] * dE[0]) +
                                                 (dE[1] * dE[1]) +
                                                 (dE[2] * dE[2]));
-                    head.moveE += extrude * scale * eScale;
+                    head.feed_rate_hz = 200;
+                    head.moveE += extrude * scale * eScale; //+ 0.01 * total_extruded;
+                    coordinated_move(&head);
+                    head.feed_rate_hz = 500;
+                    // head.moveE += extrude * scale * eScale / 2;
+                    if (coordChange[0])
+                        head.target_x = cords[X] * scale;
+                    if (coordChange[1])
+                        head.target_y = cords[Y] * scale;
+                    if (coordChange[2])
+                        head.target_z = cords[Z] * scale;
+                    head.feed_rate_hz /= 2;
+                    coordinated_move(&head);
+                    head.feed_rate_hz *= 2;
                 }
                 else
                 {
-                    if (coordChange[0])
-                        head.target_x += cords[X] * scale;
-                    if (coordChange[1])
-                        head.target_y += cords[Y] * scale;
-                    if (coordChange[2])
-                        head.target_z += cords[Z] * scale;
                 }
 
                 // Calculate the length of the move for E calculation
 
                 ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f",
                          head.target_x, head.target_y, head.target_z);
-                ESP_LOGI(TAG, "PUSHING HEAD TO %.3f MM", head.moveE);
+                ESP_LOGI(TAG, "PUSHING HEAD TO %.3f (%.5f) MM", head.moveE, head.moveE);
                 coordinated_move(&head);
-                head.moveE -= extrude * scale * eScale * 1.0f;
-                coordinated_move(&head);
+                if (pullback)
+                {
+                    head.feed_rate_hz = 200;
+                    head.moveE -= extrude * (scale * eScale * 1.0f - 0.00002f);
+                    // head.moveE = 0;
+                    ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f",
+                            head.target_x, head.target_y, head.target_z);
+                    ESP_LOGI(TAG, "PUSHING HEAD TO %.3f (%.5f) MM", head.moveE, head.moveE);
+                    coordinated_move(&head);
+                    head.feed_rate_hz = 500;
+                }
+
+                total_extruded += extrude;
+
                 break;
             default:
                 break;
             }
+            vTaskDelay(pdMS_TO_TICKS(100));
         }
         else if ((strcmp(cmd, "G2") == 0) ||
                  (strcmp(cmd, "G3") == 0))
@@ -242,8 +295,8 @@ void parse(char *line)
             float extrude = (float)sqrt((dE[0] * dE[0]) +
                                         (dE[1] * dE[1]) +
                                         (dE[2] * dE[2]) +
-                                        (dE[3] * dE[3]));
-            head.moveE = extrude * scale * eScale;
+                                        (dE[3] * dE[3])); // Why three axes?
+            head.moveE += extrude * scale * eScale;
             if (coordChange[0])
                 head.target_x = cords[X] * scale;
             if (coordChange[1])

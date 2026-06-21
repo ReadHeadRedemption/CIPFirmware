@@ -171,6 +171,7 @@ static esp_err_t rmt_step_burst(motor_id_t motor_id, uint32_t freq, uint32_t cou
 // move all motors to a organized point
 esp_err_t coordinated_move(MoveCmd_t *move)
 {
+
     float StepPerMM[] = {xStepsPerMM, yStepsPerMM, zStepsPerMM, eStepsPerMM};
 
     float K_FACTOR = 0.01f; 
@@ -195,6 +196,9 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     if (max_steps == 0)
         return ESP_OK;
 
+    gpio_set_level(motors->enable_pin, 0);
+    gpio_set_level(GPIO_NUM_10, 0);
+
     // 2. Set Directions for X, Y, Z
     stepper_set_direction(MOTOR_X, (dx >= 0) ? 0 : 1);
     stepper_set_direction(MOTOR_Y, (dy >= 0) ? 0 : 1);
@@ -210,7 +214,7 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     static const uint32_t chunk_size = 10;
 
     float v_max = (float)move->feed_rate_hz;
-    float v_min = 200.0f;
+    float v_min = (float)move->feed_rate_hz;
     if (v_max < v_min) {
         v_max = v_min;
     }
@@ -376,6 +380,10 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     for (int i = 0; i < 4; i++)
         motors[i].targetStep += actual_steps[i];
 
+    
+    gpio_set_level(motors->enable_pin, 1);
+    gpio_set_level(GPIO_NUM_10, 1);
+
     return ESP_OK;
 }
 
@@ -396,6 +404,9 @@ esp_err_t circular_move(MoveCmd_t *arc)
     float radius = sqrtf(r_start_x * r_start_x + r_start_y * r_start_y);
     float start_angle = atan2f(r_start_y, r_start_x);
     float end_angle = atan2f(r_end_y, r_end_x);
+
+    gpio_set_level(motors->enable_pin, 0);
+    gpio_set_level(GPIO_NUM_10, 0);
 
     float end_radius = sqrtf(r_end_x * r_end_x + r_end_y * r_end_y);
     if (fabsf(radius - end_radius) > 0.5f)
@@ -430,7 +441,7 @@ esp_err_t circular_move(MoveCmd_t *arc)
 
     // --- TRUE KINEMATIC ACCELERATION CONFIGURATION (By Segment) ---
     float v_max = (float)arc->feed_rate_hz;
-    float v_min = 200.0f; 
+    float v_min = (float)arc->feed_rate_hz; 
     if (v_max < v_min) v_max = v_min;
     
     float accel_rate_steps = 10000.0f; 
@@ -579,6 +590,9 @@ esp_err_t circular_move(MoveCmd_t *arc)
         motors[MOTOR_Z].position = next_z;
         motors[MOTOR_E].position = next_e;
     }
+    
+    gpio_set_level(motors->enable_pin, 1);
+    gpio_set_level(GPIO_NUM_10, 1);
 
     return ESP_OK;
 }

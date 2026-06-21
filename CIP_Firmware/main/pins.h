@@ -56,7 +56,7 @@
 #define eDir GPIO_NUM_4
 #define eStep GPIO_NUM_5
 
-//#define eEnable GPIO_NUM_7
+#define eEnable GPIO_NUM_10
 
 // Limit Switch Pins
 #define xSwitch GPIO_NUM_12

@@ -188,59 +188,59 @@ static char *skip_ws(char *s) {
     while (*s && isspace((unsigned char)*s)) ++s;
     return s;
 }
-static void console_task(void *arg) {
-    (void)arg;
-    char* line;
+// static void console_task(void *arg) {
+//     (void)arg;
+//     char* line;
 
-    // print_help();
-    while (1) {
-        // printf("> ");
-        fflush(stdout);
-        // Read line with prompt
-        line = linenoise("esp> ");
-        if (line == NULL) {
-            // Free buffer
-            linenoiseFree(line);
-            continue; // Empty line
-        }
-        // Process line
-        printf("Received: %s\n", line);
+//     // print_help();
+//     while (1) {
+//         // printf("> ");
+//         fflush(stdout);
+//         // Read line with prompt
+//         line = linenoise("esp> ");
+//         if (line == NULL) {
+//             // Free buffer
+//             linenoiseFree(line);
+//             continue; // Empty line
+//         }
+//         // Process line
+//         printf("Received: %s\n", line);
 
-        line[strcspn(line, "\r\n")] = '\0';
-        char *cmd = skip_ws(line);
-        printf("Received: %s\n", line);
+//         line[strcspn(line, "\r\n")] = '\0';
+//         char *cmd = skip_ws(line);
+//         printf("Received: %s\n", line);
 
-        if (*cmd == '\0') {
-            // Free buffer
-            linenoiseFree(line);
-            continue;
-        }
+//         if (*cmd == '\0') {
+//             // Free buffer
+//             linenoiseFree(line);
+//             continue;
+//         }
 
-        // if (strcasecmp(cmd, "help") == 0) {
-        //     print_help();
-        // }
-        // else if (strcasecmp(cmd, "status") == 0) {
-        //     print_status();
-        // }
-        // else if (strcasecmp(cmd, "stop") == 0) {
-        //     xSemaphoreGive(stop_semaphore);
-        //     ESP_LOGW(TAG, "Stop requested");
-        // }
-        // else if (strncasecmp(cmd, "run ", 4) == 0) {
-        //     char *path = skip_ws(cmd + 4);
-        //     run_gcode_file(path);
-        // }
-        // else
-        // {
-        //     execute_gcode_line(cmd);
-        // }
+//         // if (strcasecmp(cmd, "help") == 0) {
+//         //     print_help();
+//         // }
+//         // else if (strcasecmp(cmd, "status") == 0) {
+//         //     print_status();
+//         // }
+//         // else if (strcasecmp(cmd, "stop") == 0) {
+//         //     xSemaphoreGive(stop_semaphore);
+//         //     ESP_LOGW(TAG, "Stop requested");
+//         // }
+//         // else if (strncasecmp(cmd, "run ", 4) == 0) {
+//         //     char *path = skip_ws(cmd + 4);
+//         //     run_gcode_file(path);
+//         // }
+//         // else
+//         // {
+//         //     execute_gcode_line(cmd);
+//         // }
 
-        // Add to history
-        linenoiseHistoryAdd(line);
-        // Free buffer
-        linenoiseFree(line);
-    }
-}
+//         // Add to history
+//         linenoiseHistoryAdd(line);
+//         // Free buffer
+//         linenoiseFree(line);
+//     }
+// }
 ///////////////////////////////////////////////////////////////////////////////
 //
 //                          INTERRUPT HANDLES
@@ -338,7 +338,8 @@ void app_main(void)
         .pin_bit_mask = (1ULL << xDir) | (1ULL << yDir) |
                         (1ULL << zDir) | (1ULL << eDir) |
                         (1ULL << xStep) | (1ULL << yStep) |
-                        (1ULL << zStep) | (1ULL << eStep),
+                        (1ULL << zStep) | (1ULL << eStep) |
+                        (1ULL << tempEnable) | (1ULL << eEnable),
         .mode = GPIO_MODE_OUTPUT,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .pull_up_en = GPIO_PULLUP_DISABLE,
@@ -402,6 +403,9 @@ void app_main(void)
         return;
     }
     ESP_LOGI(TAG, "Booting display framework...");
+    
+    gpio_set_level(tempEnable, 1);
+    gpio_set_level(eEnable, 1);
     xTaskCreatePinnedToCore(display_task, "display_tsk", 4096, NULL, 3, NULL, 1);
     
     // Test Tasks
@@ -415,7 +419,7 @@ void app_main(void)
     // xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
     // Create G-code parser task
     xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 3, NULL);
-    xTaskCreatePinnedToCore(console_task, "console_task", 8192, NULL, 4, NULL, 0);
+    // xTaskCreatePinnedToCore(console_task, "console_task", 8192, NULL, 4, NULL, 0);
     //xTaskCreatePinnedToCore(vTelemetryTask, "telemetry_tsk", 3072, NULL, 5, NULL, 1);
 
     // ESP_LOGI(TAG, "All tasks created successfully");
