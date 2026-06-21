@@ -13,10 +13,10 @@ static rmt_encoder_handle_t motor_encoders[NUM_MOTORS] = {NULL};
 
 // Motor configurations
 static motor_config_t motors[NUM_MOTORS] = {
-    {xStep, xDir, 0, NULL, 0, 0.0, tempEnable},
-    {yStep, yDir, 0, NULL, 0, 0.0, tempEnable},
-    {zStep, zDir, 0, NULL, 0, 0.0, tempEnable},
-    {eStep, eDir, 0, NULL, 0, 0.0, tempEnable},
+    {xStep, xDir, 0, NULL, 0, 0.0, xEnable},
+    {yStep, yDir, 0, NULL, 0, 0.0, yEnable},
+    {zStep, zDir, 0, NULL, 0, 0.0, zEnable},
+    {eStep, eDir, 0, NULL, 0, 0.0, eEnable},
 };
 
 // Simple pulse structure for RMT
@@ -59,7 +59,7 @@ esp_err_t stepper_motor_init(void)
 {
     ESP_LOGI(TAG, "Initializing RMT Stepper Channels...");
     uint32_t step_pins[] = {xStep, yStep, zStep, eStep};
-    uint32_t dir_pins[] = {xDir, yDir, zDir, eDir};
+    gpio_num_t dir_pins[] = {xDir, yDir, zDir, eDir};
 
     // 1. Create a generic copy encoder configuration
     rmt_copy_encoder_config_t copy_encoder_config = {};
@@ -76,18 +76,11 @@ esp_err_t stepper_motor_init(void)
         };
         ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_chan_config, &motor_channels[i]));
 
-        // 3. Create the copy encoder for this channel <-- FIX HERE
+        // 3. Create the copy encoder for this channel
         ESP_ERROR_CHECK(rmt_new_copy_encoder(&copy_encoder_config, &motor_encoders[i]));
 
         // 4. Setup Direction Pins
-        gpio_config_t io_conf = {
-            .pin_bit_mask = (1ULL << dir_pins[i]),
-            .mode = GPIO_MODE_OUTPUT,
-            .pull_up_en = 0,
-            .pull_down_en = 0,
-            .intr_type = GPIO_INTR_DISABLE,
-        };
-        gpio_config(&io_conf);
+        ESP_ERROR_CHECK(gpio_set_direction(dir_pins[i], GPIO_MODE_OUTPUT));
 
         // 5. Enable RMT Channel
         ESP_ERROR_CHECK(rmt_enable(motor_channels[i]));

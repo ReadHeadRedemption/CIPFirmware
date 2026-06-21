@@ -1,5 +1,6 @@
 {
   "C_Cpp.intelliSenseEngine": "default",
+  "idf.extensionActivationMode": "always",
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],
@@ -12,7 +13,7 @@
   "clangd.arguments": [
     "--background-index",
     "--query-driver=**",
-    "--compile-commands-dir=c:\\Users\\ethan\\Documents\\GitHub\\CIPFirmware\\CIP_Firmware\\build"
+    "--compile-commands-dir=c:\\Users\\ethan\\Documents\\GitHub\\CIPFirmware\\test\\i2c_tools\\build"
   ],
   "idf.flashType": "UART"
 }

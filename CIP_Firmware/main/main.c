@@ -1,4 +1,5 @@
 #include "main.h"
+#include "IOExpander.h"
 static const char *TAG = "MAIN";
 
 /*
@@ -51,46 +52,65 @@ void parserTask(void *pvParameters)
     }
 }
 
-static void vTelemetryTask(void *pvParameters)
+static void checkSwitches(void *pvParameters)
 {
-    uint32_t counter = 0;
-    char buffer[32];
+    while (1)
+    {
+        if(gpio_get_level(xSwitch) == 0)
+        {
+            xSemaphoreGive(xSwitchSemaphore);
+            printf("X switch triggered\n");
+        }
+        if(gpio_get_level(ySwitch) == 0)
+        {
+            xSemaphoreGive(ySwitchSemaphore);
+            printf("Y switch triggered\n");
+        }
+        if (gpio_get_level(zSwitch) == 0)
+        {
 
-    ESP_LOGI(TAG, "Telemetry task started.");
-
-    // while (1) {
-    //     // Formulate sample operational metrics
-    //     snprintf(buffer, sizeof(buffer), "Cycles: %lu", counter++);
-        
-    //     // Pass to our decoupled display driver
-    //     display_update_status(buffer);
-
-    //     // Sleep to mimic data collection intervals (e.g., 250ms)
-    //     vTaskDelay(pdMS_TO_TICKS(250));
-    // }
+            xSemaphoreGive(zSwitchSemaphore);
+            printf("Z switch triggered\n");
+        }
+        if (gpio_get_level(eSwitch) == 0)
+        {
+            xSemaphoreGive(eSwitchSemaphore);
+            printf("E switch triggered\n");
+        }
+        vTaskDelay(pdMS_TO_TICKS(30));
+    }
+    vTaskDelete(NULL);
 }
 
-static void console_task(void *arg) {
+static void console_task(void *arg)
+{
     (void)arg;
     char *line;
 
-    while (1) {
+    while (1)
+    {
         // printf("> ");
         fflush(stdout);
         // Read line with prompt
         line = linenoise("esp> ");
-        if (line == NULL) {
+        if (line == NULL)
+        {
             // Free buffer
             linenoiseFree(line);
             continue; // Empty line
         }
         // Process line
-        if (strcmp(line, "home") == 0) {
+        if (strcmp(line, "home") == 0)
+        {
             homeMotors();
-        } else if (strcmp(line, "test") == 0) {
+        }
+        else if (strcmp(line, "test") == 0)
+        {
             ESP_LOGI(TAG, "Test command received");
-        } else {
-           parse(line);
+        }
+        else
+        {
+            parse(line);
         }
         // Add to history
         linenoiseHistoryAdd(line);
@@ -145,7 +165,7 @@ void testYaxis(void *pvParameters)
     moveTo.target_y = 0.0f;
     coordinated_move(&moveTo);
     moveTo.feed_rate_hz = 1000.0f;
-    while(1)
+    while (1)
     {
         moveTo.target_y -= .1;
         coordinated_move(&moveTo);
@@ -170,35 +190,6 @@ void buttonTest(void *pvParameters)
         }
     }
 }
-///////////////////////////////////////////////////////////////////////////////
-//
-//                          INTERRUPT HANDLES
-//
-///////////////////////////////////////////////////////////////////////////////
-void IRAM_ATTR xISRHandler(void *arg)
-{
-    //ESP_LOGV(TAG, "X Limit Switch Triggered \n");
-    BaseType_t xHigherPrioTaskWoken = pdFALSE;
-    xSemaphoreGiveFromISR(xSwitchSemaphore, &xHigherPrioTaskWoken);
-    portYIELD_FROM_ISR(xHigherPrioTaskWoken);
-}
-
-void IRAM_ATTR yISRHandler(void *arg)
-{
-    //ESP_LOGV(TAG, "Y Limit Switch Triggered \n");
-    BaseType_t xHigherPrioTaskWoken = pdFALSE;
-    xSemaphoreGiveFromISR(ySwitchSemaphore, &xHigherPrioTaskWoken);
-    portYIELD_FROM_ISR(xHigherPrioTaskWoken);
-}
-
-void IRAM_ATTR zISRHandler(void *arg)
-{
-    //ESP_LOGV(TAG, "Z Limit Switch Triggered \n");
-    BaseType_t xHigherPrioTaskWoken = pdFALSE;
-    xSemaphoreGiveFromISR(zSwitchSemaphore, &xHigherPrioTaskWoken);
-    portYIELD_FROM_ISR(xHigherPrioTaskWoken);
-}
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -209,6 +200,12 @@ void IRAM_ATTR zISRHandler(void *arg)
 void app_main(void)
 {
     ESP_LOGI(TAG, "CIP Firmware starting...");
+
+    ///////////////////////////////////////////////////////////////////////////////
+    //
+    //                          ININTIALIZING COMPONENTS
+    //
+    ///////////////////////////////////////////////////////////////////////////////
 
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
@@ -231,25 +228,55 @@ void app_main(void)
     }
     ESP_LOGI(TAG, "SPIFFS mounted successfully");
 
+    if (init_io_expander() != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to initialize IO Expander!");
+        return;
+    }
+
+    if (stepper_motor_init() != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to initialize stepper motors!");
+        return;
+    }
+
+    if (sdmmc_host_init() != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to initialize SDMMC host!");
+        return;
+    }
+
+    if (initializeSD() != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to initialize SD card!");
+        return;
+    }
+
+    // Creating button semaphores
+    StartButtonSemaphore = xSemaphoreCreateBinary();
+    TestButtonSemaphore = xSemaphoreCreateBinary();
+
     // Creating limit switch semaphores
     xSwitchSemaphore = xSemaphoreCreateBinary();
     ySwitchSemaphore = xSemaphoreCreateBinary();
     zSwitchSemaphore = xSemaphoreCreateBinary();
     eSwitchSemaphore = xSemaphoreCreateBinary();
+
+    // Mutexes
+    SDCardMutex = xSemaphoreCreateMutex();
+
     ///////////////////////////////////////////////////////////////////////////////
     //
     //                          PIN CONFIGURATIONS
     //
-    //////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
 
     // Setting Pin Directions
     ESP_LOGI(TAG, "Configuring GPIO pins...");
     ESP_LOGI(TAG, "Configuring Output pins...");
     // Configure stepper direction pins as outputs
     gpio_config_t outputPins = {
-        .pin_bit_mask = (1ULL << xDir) | (1ULL << yDir) |
-                        (1ULL << zDir) | (1ULL << eDir) |
-                        (1ULL << xStep) | (1ULL << yStep) |
+        .pin_bit_mask = (1ULL << xStep) | (1ULL << yStep) |
                         (1ULL << zStep) | (1ULL << eStep),
         .mode = GPIO_MODE_OUTPUT,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -258,28 +285,20 @@ void app_main(void)
     };
     gpio_config(&outputPins);
     ESP_LOGI(TAG, "Configuring Input pins...");
-    gpio_config_t inputPins = {
-        .pin_bit_mask = (1ULL << xSwitch) | (1ULL << ySwitch) |
-                        (1ULL << zSwitch) |
-                        (1ULL << HEAD_ID_0) | (1ULL << HEAD_ID_1),
-        .mode = GPIO_MODE_INPUT,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&inputPins);
+    // gpio_config_t inputPins = {
+    //     .pin_bit_mask = (1ULL << xSwitch) | (1ULL << ySwitch) |
+    //                     (1ULL << zSwitch),
+    //     .mode = GPIO_MODE_INPUT,
+    //     .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    //     .pull_up_en = GPIO_PULLUP_ENABLE,
+    //     .intr_type = GPIO_INTR_DISABLE,
+    // };
+    // gpio_config(&inputPins);
+    gpio_set_direction(xSwitch, GPIO_MODE_INPUT);
+    gpio_set_direction(ySwitch, GPIO_MODE_INPUT);
+    gpio_set_direction(zSwitch, GPIO_MODE_INPUT);
+    gpio_set_direction(eSwitch, GPIO_MODE_INPUT);
     ESP_LOGI(TAG, "GPIO pins configured successfully");
-
-    gpio_install_isr_service(0);
-    gpio_set_intr_type(xSwitch, GPIO_INTR_POSEDGE);
-    gpio_isr_handler_add(xSwitch, xISRHandler, NULL);
-    gpio_set_intr_type(ySwitch, GPIO_INTR_POSEDGE);
-    gpio_isr_handler_add(ySwitch, yISRHandler, NULL);
-    gpio_set_intr_type(zSwitch, GPIO_INTR_POSEDGE);
-    gpio_isr_handler_add(zSwitch, zISRHandler, NULL);
-
-
-    ESP_LOGI(TAG, "GPIO interrupts configured successfully");
 
     // ESP_ERROR_CHECK(gpio_config(&outputPins));
 
@@ -289,26 +308,20 @@ void app_main(void)
     //
     /////////////////////////////////////////////////////////////////////////
     // Initialize stepper motors
-    if (stepper_motor_init() != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to initialize stepper motors!");
-        return;
-    }
-    ESP_LOGI(TAG, "Booting display framework...");
-    xTaskCreatePinnedToCore(display_task, "display_tsk", 4096, NULL, 5, NULL, 1);
-    
+
+    xTaskCreate(display_task, "display_tsk", 4096, NULL, 4, NULL);
+
     // Test Tasks
     xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
-    //xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
-    //xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
+    // xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
+    // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
-    
-
-    //Create heater control task
-    // xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
-    // Create G-code parser task
-    xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
-    //xTaskCreatePinnedToCore(vTelemetryTask, "telemetry_tsk", 3072, NULL, 5, NULL, 1);
-
+    xTaskCreate(readSD, "testing SD Card", 4096, NULL, 5, NULL);
+    //xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
+    // Create heater control task
+    //  xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
+    //  Create G-code parser task
+    // xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
+    xTaskCreatePinnedToCore(checkSwitches, "poll limit switches", 3072, NULL, 5, NULL, 1);
     // ESP_LOGI(TAG, "All tasks created successfully");
 }

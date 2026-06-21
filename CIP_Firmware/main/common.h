@@ -7,7 +7,9 @@
 #include "driver/gpio.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_io_expander_gpio_wrapper.h"
 #include "pins.h"
+#include "IOExpander.h"
 
 //Include RTOS Headers for real time management of the firmware
 #include "freertos/FreeRTOS.h"
@@ -45,5 +47,9 @@ extern SemaphoreHandle_t eSwitchSemaphore;
 extern SemaphoreHandle_t StartButtonSemaphore;
 extern SemaphoreHandle_t TestButtonSemaphore;
 extern SemaphoreHandle_t parseSemaphore; 
+extern SemaphoreHandle_t SDCardMutex;
+
+extern esp_io_expander_handle_t io_expander;
+
 
 #endif 

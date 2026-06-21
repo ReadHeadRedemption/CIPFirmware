@@ -9,6 +9,8 @@ SemaphoreHandle_t eSwitchSemaphore = NULL;
 SemaphoreHandle_t StartButtonSemaphore = NULL;
 SemaphoreHandle_t TestButtonSemaphore = NULL;
 SemaphoreHandle_t parseSemaphore = NULL; 
+SemaphoreHandle_t SDCardMutex = NULL;
+    
 
 MoveCmd_t head = {
     .target_x = 0.0f,
