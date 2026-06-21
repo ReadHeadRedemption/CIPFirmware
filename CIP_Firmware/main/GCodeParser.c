@@ -1,5 +1,7 @@
 #include "GCodeParser.h"
 #include "esp_log.h"
+#include "IOExpander.h"
+#include "esp_task_wdt.h"
 
 static const char *TAG = "GCODE_PARSER";
 
@@ -14,6 +16,7 @@ bool distMode = true;
 // Temp file location to load into the esp32
 void readParseFile(char *fileLocation)
 {
+    parseSemaphore = xSemaphoreCreateMutex();
     FILE *file = fopen(fileLocation, "r");
     char line[128];
 
@@ -36,10 +39,8 @@ void readParseFile(char *fileLocation)
 void parse(char *line)
 {
     char *p;
-    char cmd[4] = "";
-    float cords[3] = {0.0f, 0.0f, 0.0f};
-
-    parseSemaphore = xSemaphoreCreateMutex();
+    char cmd[8] = "";
+    float cords[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
     bool coordChange[3] = {false, false, false};
     // First parse the command
@@ -281,27 +282,60 @@ void parse(char *line)
         head.target_y = 0 * scale;
         head.target_z = 100 * scale;
         coordinated_move(&head);
+
         int tool = 0;
         if ((p = strchr(line, 'T')) != NULL)
         {
             sscanf(p + 1, "%d", &tool);
         }
-        char *toolIndex[] = {"Conductive Ink", "Insulator Ink", "Camera", NULL};
-        ESP_LOGI(TAG, "CALLING T: TOOL CHANGE TO %s", toolIndex[tool]);
-        changeTool(tool);
-        int id1 = gpio_get_level(HEAD_ID_0); // read tool ID pin
-        int id2 = gpio_get_level(HEAD_ID_1); // read tool ID pin
-        // Delay until the tool ID matches correct tool
-        do
-        {
-            id1 = gpio_get_level(HEAD_ID_0);
-            id2 = gpio_get_level(HEAD_ID_1);
 
-            if (tool != (1 << (id1 + id2)))
+        // 1. Safety Check: Prevent array out-of-bounds crashes
+        if (tool < 0 || tool > 2)
+        {
+            ESP_LOGE(TAG, "Invalid tool index requested: %d", tool);
+            // Handle error (e.g., return or break) depending on your loop structure
+        }
+        else
+        {
+            char *toolIndex[] = {"Conductive Ink", "Insulator Ink", "Camera", NULL};
+            ESP_LOGI(TAG, "CALLING T: TOOL CHANGE TO %s", toolIndex[tool]);
+            changeTool(tool);
+
+            int current_head_id = -1;
+            uint32_t headID0 = -1;
+            uint32_t headID1 = -1;
+            int id0 = -1;
+            int id1 = -1;
+            uint32_t pin_levels = -1;
+
+            // 2. Fixed IO Check Loop
+            ESP_LOGI(TAG, "Address of handle: %p", (void *)io_expander);
+            if (io_expander == NULL)
             {
-                vTaskDelay(pdMS_TO_TICKS(10)); // FreeRTOS 10ms delay to let other tasks run
+                ESP_LOGE(TAG, "THE HANDLE IS NULL RIGHT BEFORE USE!");
+                while (1)
+                {
+                    vTaskDelay(10);
+                } // Trap it here so it doesn't crash
             }
-        } while (tool != (1 << (id1 + id2)));
+
+            while (current_head_id != tool)
+            {
+                if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE)
+                {
+                    esp_io_expander_get_level(io_expander, IO_EXPANDER_PIN_NUM_0, &headID0);
+                    esp_io_expander_get_level(io_expander, IO_EXPANDER_PIN_NUM_1, &headID1);
+                    xSemaphoreGive(i2c_mutex);
+                }
+
+                id0 = (int)headID0;
+                id1 = (int)headID1;
+                current_head_id = ((id1 << 1) | id0);
+                //esp_task_wdt_reset();
+                vTaskDelay(pdMS_TO_TICKS(10));
+            }
+            ESP_LOGI(TAG, "Tool change successful.");
+        }
     }
 }
 /*

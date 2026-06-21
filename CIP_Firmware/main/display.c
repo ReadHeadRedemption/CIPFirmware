@@ -37,22 +37,37 @@ static void home_screen_cb(lv_event_t *e)
 //
 ///////////////////////////////////////////////////////////////////////////
 
-static lv_obj_t *gcode_roller_global = NULL;  // Keep reference to roller for print button
+void sendToParse(char fileName[128])
+{
+    if ((strstr(fileName, ".GCO")) != NULL)
+    {
+        ESP_LOGI(TAG, "I AM SENDING TO THE QUEUE");
+        xQueueSend(FileName, fileName, portMAX_DELAY);
+        xSemaphoreGive(StartButtonSemaphore);
+    }
+    else
+    {
+        // Add an else statement so you know EXACTLY why it failed in the logs
+        ESP_LOGE(TAG, "Queue skipped: '%s' is missing a valid G-code extension.", fileName);
+    }
+}
+
+static lv_obj_t *gcode_roller_global = NULL; // Keep reference to roller for print button
 
 static void roller_event_cb(lv_event_t *e)
 {
     lv_obj_t *roller = lv_event_get_target(e);
-    
+
     if (!lvgl_port_lock(0))
         return;
-    
+
     // Get the selected filename
     char selected_file[128];
     lv_roller_get_selected_str(roller, selected_file, sizeof(selected_file));
-    
+
     // Print to console
     ESP_LOGI(TAG, "Selected file: %s", selected_file);
-    
+
     lvgl_port_unlock();
 }
 
@@ -60,17 +75,15 @@ static void print_button_cb(lv_event_t *e)
 {
     if (!lvgl_port_lock(0))
         return;
-    
+
     // Get the selected filename from the roller
     char selected_file[128];
     lv_roller_get_selected_str(gcode_roller_global, selected_file, sizeof(selected_file));
-    
+
     // Print to console
     ESP_LOGI(TAG, "Printing file: %s", selected_file);
-    
-    // Call your print function here
-    homeMotors();
-    
+    sendToParse(selected_file);
+
     lvgl_port_unlock();
 }
 
@@ -78,10 +91,10 @@ static void refresh_sd_cb(lv_event_t *e)
 {
     if (!lvgl_port_lock(0))
         return;
-    
+
     ESP_LOGI(TAG, "Refreshing SD card file list...");
     // You can add SD card refresh logic here if needed
-    
+
     lvgl_port_unlock();
 }
 
@@ -176,7 +189,7 @@ void printDisplay(void)
     lv_roller_set_options(gcode_roller_global, options_buf, LV_ROLLER_MODE_NORMAL);
 
     // 5. Style and position the roller (FULL WIDTH)
-    lv_obj_set_width(gcode_roller_global, LCD_H_RES - 20);  // Full width with 10px margins
+    lv_obj_set_width(gcode_roller_global, LCD_H_RES - 20);   // Full width with 10px margins
     lv_roller_set_visible_row_count(gcode_roller_global, 4); // Show 4 items at a time
     lv_obj_align(gcode_roller_global, LV_ALIGN_CENTER, 0, 20);
 
@@ -304,7 +317,7 @@ void test_screen(void)
     lv_obj_t *testScreen = lv_obj_create(NULL);
     lv_scr_load(testScreen);
 
-    // Set a standard antialiased font. Removed subpx fonts as they look terrible when rotated. 
+    // Set a standard antialiased font. Removed subpx fonts as they look terrible when rotated.
     // #if LV_FONT_MONTSERRAT_16
     //     lv_obj_set_style_text_font(scr, &lv_font_montserrat_16, 0);
     // #elif LV_FONT_MONTSERRAT_14
@@ -448,7 +461,7 @@ void display_init(void)
     };
     ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
-    // Install panel IO (SPI) 
+    // Install panel IO (SPI)
     const esp_lcd_panel_io_spi_config_t io_config = ILI9341_PANEL_IO_SPI_CONFIG(csDisplay, dcDisplay, NULL, NULL);
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)SPI3_HOST, &io_config, &lcd_io));
 
@@ -472,7 +485,7 @@ void display_init(void)
     esp_lcd_panel_mirror(lcd_panel, true, false);
     esp_lcd_panel_disp_on_off(lcd_panel, true);
 
-    // Touch (XPT2046) using same SPI bus but separate CS 
+    // Touch (XPT2046) using same SPI bus but separate CS
     esp_lcd_panel_io_handle_t tp_io = NULL;
     const esp_lcd_panel_io_spi_config_t tp_io_cfg = ESP_LCD_TOUCH_IO_SPI_XPT2046_CONFIG(csTouch);
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)SPI3_HOST, &tp_io_cfg, &tp_io));
@@ -487,16 +500,16 @@ void display_init(void)
     };
     ESP_ERROR_CHECK(esp_lcd_touch_new_spi_xpt2046(tp_io, &tp_cfg, &touch_handle));
 
-    // Initialize LVGL port 
+    // Initialize LVGL port
     const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     ESP_ERROR_CHECK(lvgl_port_init(&lvgl_cfg));
 
-    // Add display to LVGL 
+    // Add display to LVGL
     lvgl_port_display_cfg_t disp_cfg = {0};
     disp_cfg.io_handle = lcd_io;
     disp_cfg.panel_handle = lcd_panel;
     disp_cfg.buffer_size = LCD_H_RES * DRAW_BUFF_HEIGHT;
-    // Use double buffering to reduce flicker and improve text rendering 
+    // Use double buffering to reduce flicker and improve text rendering
     disp_cfg.double_buffer = 1;
     disp_cfg.hres = LCD_H_RES;
     disp_cfg.vres = LCD_V_RES;
@@ -523,7 +536,7 @@ void display_init(void)
         return;
     }
 
-    // Add touch to LVGL 
+    // Add touch to LVGL
     const lvgl_port_touch_cfg_t touch_cfg = {
         .disp = g_lv_disp,
         .handle = touch_handle,
@@ -535,12 +548,12 @@ void display_init(void)
         return;
     }
 
-    // Build a simple UI 
+    // Build a simple UI
     lvgl_port_lock(0);
     lv_obj_t *scr = lv_scr_act();
     g_main_screen = scr;
 
-    // Set a standard antialiased font. Removed subpx fonts as they look terrible when rotated. 
+    // Set a standard antialiased font. Removed subpx fonts as they look terrible when rotated.
 #if LV_FONT_MONTSERRAT_16
     lv_obj_set_style_text_font(scr, &lv_font_montserrat_16, 0);
 #elif LV_FONT_MONTSERRAT_14
@@ -551,7 +564,7 @@ void display_init(void)
     lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
     lv_obj_set_style_text_color(scr, lv_color_black(), 0);
 
-    // Status label 
+    // Status label
     g_status_label = lv_label_create(scr);
     lv_obj_set_width(g_status_label, LCD_H_RES - 20);
     lv_obj_set_style_text_align(g_status_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -567,7 +580,7 @@ void display_init(void)
     //
     ///////////////////////////////////////////////////////////////////////////
 
-    // Test button 
+    // Test button
     lv_obj_t *tstbtn = lv_btn_create(scr);
     lv_obj_set_size(tstbtn, 140, 50);
     lv_obj_align(tstbtn, LV_ALIGN_CENTER, 0, -80);
@@ -577,7 +590,7 @@ void display_init(void)
     // CHANGED: Button text color to black
     lv_obj_set_style_text_color(tstbtnlabel, lv_color_black(), 0);
 
-    // simple event handler: increment counter and update status 
+    // simple event handler: increment counter and update status
     lv_obj_add_event_cb(tstbtn, tstscr, LV_EVENT_CLICKED, NULL);
 
     // PRINT FILES BUTTON

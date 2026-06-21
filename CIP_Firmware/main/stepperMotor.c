@@ -80,7 +80,7 @@ esp_err_t stepper_motor_init(void)
         ESP_ERROR_CHECK(rmt_new_copy_encoder(&copy_encoder_config, &motor_encoders[i]));
 
         // 4. Setup Direction Pins
-        ESP_ERROR_CHECK(gpio_set_direction(dir_pins[i], GPIO_MODE_OUTPUT));
+        // ESP_ERROR_CHECK(gpio_set_direction(dir_pins[i], GPIO_MODE_OUTPUT));
 
         // 5. Enable RMT Channel
         ESP_ERROR_CHECK(rmt_enable(motor_channels[i]));

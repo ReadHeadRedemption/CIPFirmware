@@ -86,22 +86,6 @@ esp_err_t openDirectory()
     return ESP_OK;
 }
 
-
-// Hide a file
-void hide_file(const char *filename)
-{
-    FRESULT res = f_chmod(filename, AM_HID, AM_HID);
-    
-    if (res == FR_OK)
-    {
-        ESP_LOGI(TAG, "File hidden: %s", filename);
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Failed to hide file: %d", res);
-    }
-}
-
 void readSD(void *pvParameters)
 {
     bool flag = true;
@@ -129,7 +113,6 @@ void readSD(void *pvParameters)
                 }
             }
             fclose(file);
-            hide_file("/sdcard/config.txt");
         }
         vTaskDelay(10000 / portTICK_PERIOD_MS); // Delay for 1 second
     }

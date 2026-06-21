@@ -41,38 +41,69 @@ void HeaterControl(void *pvParameters)
 
 void parserTask(void *pvParameters)
 {
+    BaseType_t recieveFlag;
+    char fileString[128];
     while (1)
     {
-        if (xSemaphoreTake(StartButtonSemaphore, portMAX_DELAY) == pdTRUE)
+
+        recieveFlag = xQueueReceive(FileName, &fileString, 1); // recieve values from the queue
+        if (recieveFlag == pdPASS)
         {
-            ESP_LOGI(TAG, "Starting G-code parser task...");
-            readParseFile(spiffs_file);
-            ESP_LOGI(TAG, "G-code parsing completed");
+            ESP_LOGI(TAG, "I HAVE READ FROM THE QUEUE");
+            if (xSemaphoreTake(StartButtonSemaphore, portMAX_DELAY) == pdTRUE)
+            {
+
+                ESP_LOGI(TAG, "Starting G-code parser task...");
+                char filepath[256];
+                snprintf(filepath, sizeof(filepath), "/sdcard/%s", fileString);
+                ESP_LOGI(TAG, "FILE LOCATION: %s",filepath);
+                readParseFile(filepath); 
+            }
         }
     }
+    // while (1)
+    // {
+    //     if (xSemaphoreTake(StartButtonSemaphore, portMAX_DELAY) == pdTRUE)
+    //     {
+    //         ESP_LOGI(TAG, "Starting G-code parser task...");
+    //         readParseFile(spiffs_file);
+    //         ESP_LOGI(TAG, "G-code parsing completed");
+    //     }
+    // }
+    vTaskDelete(NULL);
 }
 
 static void checkSwitches(void *pvParameters)
 {
+    int levels[4] = {0};
     while (1)
     {
-        if(gpio_get_level(xSwitch) == 0)
+        if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+        {
+            levels[0] = gpio_get_level(xSwitch);
+            levels[1] = gpio_get_level(ySwitch);
+            levels[2] = gpio_get_level(zSwitch);
+            levels[3] = gpio_get_level(eSwitch);
+
+            xSemaphoreGive(i2c_mutex);
+        }
+        if (levels[0] == 0)
         {
             xSemaphoreGive(xSwitchSemaphore);
             printf("X switch triggered\n");
         }
-        if(gpio_get_level(ySwitch) == 0)
+        if (levels[1] == 0)
         {
             xSemaphoreGive(ySwitchSemaphore);
             printf("Y switch triggered\n");
         }
-        if (gpio_get_level(zSwitch) == 0)
+        if (levels[2] == 0)
         {
 
             xSemaphoreGive(zSwitchSemaphore);
             printf("Z switch triggered\n");
         }
-        if (gpio_get_level(eSwitch) == 0)
+        if (levels[3] == 0)
         {
             xSemaphoreGive(eSwitchSemaphore);
             printf("E switch triggered\n");
@@ -228,6 +259,8 @@ void app_main(void)
     }
     ESP_LOGI(TAG, "SPIFFS mounted successfully");
 
+
+    vTaskDelay(pdMS_TO_TICKS(100));
     if (init_io_expander() != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to initialize IO Expander!");
@@ -264,6 +297,10 @@ void app_main(void)
 
     // Mutexes
     SDCardMutex = xSemaphoreCreateMutex();
+    i2c_mutex = xSemaphoreCreateMutex();
+
+    // Queues
+    FileName = xQueueCreate(1, (sizeof(char) * 128));
 
     ///////////////////////////////////////////////////////////////////////////////
     //
@@ -294,10 +331,7 @@ void app_main(void)
     //     .intr_type = GPIO_INTR_DISABLE,
     // };
     // gpio_config(&inputPins);
-    gpio_set_direction(xSwitch, GPIO_MODE_INPUT);
-    gpio_set_direction(ySwitch, GPIO_MODE_INPUT);
-    gpio_set_direction(zSwitch, GPIO_MODE_INPUT);
-    gpio_set_direction(eSwitch, GPIO_MODE_INPUT);
+ 
     ESP_LOGI(TAG, "GPIO pins configured successfully");
 
     // ESP_ERROR_CHECK(gpio_config(&outputPins));
@@ -309,19 +343,19 @@ void app_main(void)
     /////////////////////////////////////////////////////////////////////////
     // Initialize stepper motors
 
-    xTaskCreate(display_task, "display_tsk", 4096, NULL, 4, NULL);
+    xTaskCreate(display_task, "display_tsk", 4096, NULL, 3, NULL);
 
     // Test Tasks
     xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
     // xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
     // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
-    xTaskCreate(readSD, "testing SD Card", 4096, NULL, 5, NULL);
-    //xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
-    // Create heater control task
-    //  xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
-    //  Create G-code parser task
-    // xTaskCreate(parserTask, "GCodeParser", 4096, NULL, 3, NULL);
-    xTaskCreatePinnedToCore(checkSwitches, "poll limit switches", 3072, NULL, 5, NULL, 1);
+    xTaskCreate(readSD, "testing SD Card", 4096, NULL, 4, NULL);
+    // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
+    //  Create heater control task
+    //   xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
+    //   Create G-code parser task
+    xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, NULL);
+    xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
     // ESP_LOGI(TAG, "All tasks created successfully");
 }
