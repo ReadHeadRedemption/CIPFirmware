@@ -317,7 +317,7 @@ void display_init(void)
         .x_max = LCD_H_RES,
         .y_max = LCD_V_RES,
         .rst_gpio_num = reset,
-        .int_gpio_num = touchInterrupt,
+        .int_gpio_num = -1, //touchInterrupt,
         .levels = {.reset = 0, .interrupt = 0},
         .flags = {.swap_xy = 0, .mirror_x = 0, .mirror_y = 1},
     };

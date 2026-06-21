@@ -1,6 +1,7 @@
 #include "common.h"
 
-
+QueueHandle_t uart_queue;
+uart_event_t event;
 
 SemaphoreHandle_t xSwitchSemaphore = NULL;
 SemaphoreHandle_t ySwitchSemaphore = NULL;

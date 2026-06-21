@@ -26,7 +26,7 @@
 #define csDisplay GPIO_NUM_8
 #define dcDisplay GPIO_NUM_11 
 #define csTouch GPIO_NUM_3
-#define touchInterrupt GPIO_NUM_40
+#define touchInterrupt GPIO_NUM_39
 
 
 ////////////////////////////////////////////////////////////////////

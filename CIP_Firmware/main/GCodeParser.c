@@ -17,6 +17,24 @@ void readParseFile(char *fileLocation)
 {
     FILE *file = fopen(fileLocation, "r");
     char line[128];
+    char *p;
+    char cmd[7] = "";
+    float cords[3] = {0.0f, 0.0f, 0.0f};
+
+    uint32_t feed = 0;
+
+    float scale = 1.0f;
+    float eScale = 0.006f;
+    float extrude = 0.0f;
+
+    bool distMode = true;
+    MoveCmd_t head;
+    head.target_x = cords[X] * scale;
+    head.target_y = cords[Y] * scale;
+    head.target_z = cords[Z] * scale;
+    head.moveE = 0.0f;
+    head.feed_rate_hz = 5000;
+    parseSemaphore = xSemaphoreCreateMutex();
 
     if (file == NULL)
     {
@@ -50,14 +68,14 @@ void parse(char *line)
     M
     ; means comment
     */
-    sscanf(line, "%4s", cmd);
+    sscanf(line, "%7s", cmd);
     ESP_LOGI(TAG, "COMMAND: %s", cmd);
     char *commentStart = strchr(line, ';');
     if (commentStart != NULL)
     {
         *commentStart = '\0';
     }
-    else if (cmd[0] == 'F')
+    if (cmd[0] == 'F')
     {
         if ((p = strchr(line, 'F')) != NULL)
         {
@@ -65,7 +83,7 @@ void parse(char *line)
         }
         head.feed_rate_hz = feed;
     }
-    else if (cmd[0] == 'G')
+    if (cmd[0] == 'G')
     {
         // start scaning for G type values
         if ((strcmp(cmd, "G0") == 0) || // rapid movement
@@ -175,7 +193,7 @@ void parse(char *line)
                          head.target_x, head.target_y, head.target_z);
                 ESP_LOGI(TAG, "PUSHING HEAD TO %.3f MM", head.moveE);
                 coordinated_move(&head);
-                head.moveE -= extrude * scale * eScale * 0.01f;
+                head.moveE -= extrude * scale * eScale * 1.0f;
                 coordinated_move(&head);
                 break;
             default:

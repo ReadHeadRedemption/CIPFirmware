@@ -1,6 +1,11 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#define TXD_PIN (GPIO_NUM_40)
+#define RXD_PIN (GPIO_NUM_38)
+#define UART_PORT_NUM (UART_NUM_1)
+#define BAUD_RATE (9600)
+
 #include <stdio.h>
 
 //ESP32 Headers
@@ -8,12 +13,15 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "pins.h"
+#include "driver/uart.h"
 
 //Include RTOS Headers for real time management of the firmware
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
+extern QueueHandle_t uart_queue;
+extern uart_event_t event;
 
 // Global Variables
 // Struct to define a multi-axis move command
