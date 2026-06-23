@@ -173,7 +173,7 @@ esp_err_t coordinated_move(MoveCmd_t *move)
 {
     float StepPerMM[] = {xStepsPerMM, yStepsPerMM, zStepsPerMM, eStepsPerMM};
 
-    
+    printf("hi!");
 
     // 1. Calculate target steps
     float dx = move->target_x - motors[MOTOR_X].position;
@@ -210,7 +210,7 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     static const uint32_t chunk_size = 10;
 
     float v_max = (float)move->feed_rate_hz;
-    float v_min = 200.0f;
+    float v_min = (float)move->feed_rate_hz;
     if (v_max < v_min) {
         v_max = v_min;
     }
@@ -232,6 +232,8 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     static float step_error[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     int32_t actual_steps[4] = {0, 0, 0, 0}; 
     float current_ideal_e = 0.0f; 
+
+    printf("hello");
 
     // 4. Movement Loop
     while (steps_taken < max_steps)
@@ -430,7 +432,7 @@ esp_err_t circular_move(MoveCmd_t *arc)
 
     // --- TRUE KINEMATIC ACCELERATION CONFIGURATION (By Segment) ---
     float v_max = (float)arc->feed_rate_hz;
-    float v_min = 200.0f; 
+    float v_min = (float)arc->feed_rate_hz;
     if (v_max < v_min) v_max = v_min;
     
     float accel_rate_steps = 10000.0f; 

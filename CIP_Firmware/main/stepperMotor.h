@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "driver/mcpwm_prelude.h"
+#include "pins.h"
 
 
 #define MicroStepping 32.0f

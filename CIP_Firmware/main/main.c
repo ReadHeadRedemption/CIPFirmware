@@ -1,5 +1,6 @@
 #include "main.h"
 #include "IOExpander.h"
+
 static const char *TAG = "MAIN";
 
 /*
@@ -45,7 +46,7 @@ void parserTask(void *pvParameters)
     char fileString[128];
     while (1)
     {
-
+        // printf("hi");
         recieveFlag = xQueueReceive(FileName, &fileString, 1); // recieve values from the queue
         if (recieveFlag == pdPASS)
         {
@@ -331,6 +332,22 @@ void app_main(void)
     //     .intr_type = GPIO_INTR_DISABLE,
     // };
     // gpio_config(&inputPins);
+    uart_config_t uart_config2 = {
+        .baud_rate = 9600,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+    uart_param_config(UART_NUM_1, &uart_config2);
+    
+    // Set UART pins (using -1 for pins you don't want to change)
+    uart_set_pin(UART_NUM_1, PI_TX, PI_RX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    
+    // Configure UART parameters
+    const int uart_buffer_size = (1024 * 2);
+    uart_driver_install(UART_NUM_1, uart_buffer_size, uart_buffer_size, 10, &uart_queue, 0);
  
     ESP_LOGI(TAG, "GPIO pins configured successfully");
 
@@ -343,19 +360,19 @@ void app_main(void)
     /////////////////////////////////////////////////////////////////////////
     // Initialize stepper motors
 
-    xTaskCreate(display_task, "display_tsk", 4096, NULL, 3, NULL);
+    // xTaskCreate(display_task, "display_tsk", 4096, NULL, 3, NULL);
 
     // Test Tasks
     xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
     // xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
     // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
-    xTaskCreate(readSD, "testing SD Card", 4096, NULL, 4, NULL);
+    // xTaskCreate(readSD, "testing SD Card", 4096, NULL, 1, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     //  Create heater control task
     //   xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
     //   Create G-code parser task
-    xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, NULL);
-    xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
+    // xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, NULL);
+    // xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
     // ESP_LOGI(TAG, "All tasks created successfully");
 }
