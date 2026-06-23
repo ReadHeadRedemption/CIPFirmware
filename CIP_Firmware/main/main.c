@@ -28,6 +28,8 @@ Limit Switch Interrupts -- Homeing function
 char *tempFile = "main\\sample.gcode";
 char *spiffs_file = "/spiffs/sample.gcode";
 
+TaskHandle_t parserHandle = NULL;
+
 ///////////////////////////////////////////////////////////////////////////////
 //
 //                          TASKS
@@ -95,7 +97,14 @@ static void console_task(void *arg) {
             homeMotors();
         } else if (strcmp(line, "test") == 0) {
             ESP_LOGI(TAG, "Test command received");
-        } else {
+        } else if (strcmp(line, "stop") == 0)
+        {
+            char pullup[] = "G1 E-600";
+            vTaskSuspend(parserHandle);
+            parse(pullup);
+            ESP_LOGI(TAG, "STOPPING");
+        }
+        else {
            parse(line);
         }
         // Add to history
@@ -418,7 +427,7 @@ void app_main(void)
     //Create heater control task
     // xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
     // Create G-code parser task
-    xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 3, NULL);
+    xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 3, &parserHandle);
     // xTaskCreatePinnedToCore(console_task, "console_task", 8192, NULL, 4, NULL, 0);
     //xTaskCreatePinnedToCore(vTelemetryTask, "telemetry_tsk", 3072, NULL, 5, NULL, 1);
 
