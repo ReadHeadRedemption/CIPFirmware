@@ -10,6 +10,7 @@
 #include "esp_io_expander_gpio_wrapper.h"
 #include "pins.h"
 #include "IOExpander.h"
+#include "driver/uart.h"
 
 //Include RTOS Headers for real time management of the firmware
 #include "freertos/FreeRTOS.h"
@@ -38,6 +39,9 @@ typedef struct {
 } MoveCmd_t;
 
 extern MoveCmd_t head;
+
+extern QueueHandle_t uart_queue;
+extern uart_event_t event;
 
 // Semaphores
 extern SemaphoreHandle_t xSwitchSemaphore;
