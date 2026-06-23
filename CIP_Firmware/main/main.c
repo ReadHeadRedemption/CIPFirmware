@@ -56,8 +56,8 @@ void parserTask(void *pvParameters)
                 ESP_LOGI(TAG, "Starting G-code parser task...");
                 char filepath[256];
                 snprintf(filepath, sizeof(filepath), "/sdcard/%s", fileString);
-                ESP_LOGI(TAG, "FILE LOCATION: %s",filepath);
-                readParseFile(filepath); 
+                ESP_LOGI(TAG, "FILE LOCATION: %s", filepath);
+                readParseFile(filepath);
             }
         }
     }
@@ -76,6 +76,7 @@ void parserTask(void *pvParameters)
 static void checkSwitches(void *pvParameters)
 {
     int levels[4] = {0};
+    ESP_LOGI(TAG, "STARTING LIMIT SWITCH TASK");
     while (1)
     {
         if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
@@ -84,29 +85,29 @@ static void checkSwitches(void *pvParameters)
             levels[1] = gpio_get_level(ySwitch);
             levels[2] = gpio_get_level(zSwitch);
             levels[3] = gpio_get_level(eSwitch);
-
+            // ESP_LOGI(TAG, "SWITCH LEVELS READ: %d, %d, %d, %d", levels[0], levels[1], levels[2], levels[3]);
             xSemaphoreGive(i2c_mutex);
         }
-        if (levels[0] == 0)
+        if (levels[0] == 1)
         {
             xSemaphoreGive(xSwitchSemaphore);
             printf("X switch triggered\n");
         }
-        if (levels[1] == 0)
+        if (levels[1] == 1)
         {
             xSemaphoreGive(ySwitchSemaphore);
             printf("Y switch triggered\n");
         }
-        if (levels[2] == 0)
+        if (levels[2] == 1)
         {
 
             xSemaphoreGive(zSwitchSemaphore);
             printf("Z switch triggered\n");
         }
-        if (levels[3] == 0)
+        if (levels[3] == 1)
         {
             xSemaphoreGive(eSwitchSemaphore);
-            printf("E switch triggered\n");
+            // printf("E switch triggered\n");
         }
         vTaskDelay(pdMS_TO_TICKS(30));
     }
@@ -231,6 +232,20 @@ void buttonTest(void *pvParameters)
 void app_main(void)
 {
     ESP_LOGI(TAG, "CIP Firmware starting...");
+    gpio_set_direction(xStep, GPIO_MODE_OUTPUT);
+    gpio_set_direction(yStep, GPIO_MODE_OUTPUT);
+    gpio_set_direction(zStep, GPIO_MODE_OUTPUT);
+    gpio_set_direction(eStep, GPIO_MODE_OUTPUT);
+
+    // gpio_config_t outputPins = {
+    //     .pin_bit_mask = (1ULL << xStep) | (1ULL << yStep) |
+    //                     (1ULL << zStep) | (1ULL << eStep),
+    //     .mode = GPIO_MODE_OUTPUT,
+    //     .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    //     .pull_up_en = GPIO_PULLUP_DISABLE,
+    //     .intr_type = GPIO_INTR_DISABLE,
+    // };
+    // gpio_config(&outputPins);
 
     ///////////////////////////////////////////////////////////////////////////////
     //
@@ -258,7 +273,6 @@ void app_main(void)
         return;
     }
     ESP_LOGI(TAG, "SPIFFS mounted successfully");
-
 
     vTaskDelay(pdMS_TO_TICKS(100));
     if (init_io_expander() != ESP_OK)
@@ -294,6 +308,7 @@ void app_main(void)
     ySwitchSemaphore = xSemaphoreCreateBinary();
     zSwitchSemaphore = xSemaphoreCreateBinary();
     eSwitchSemaphore = xSemaphoreCreateBinary();
+    allowMove = xSemaphoreCreateBinary();
 
     // Mutexes
     SDCardMutex = xSemaphoreCreateMutex();
@@ -312,15 +327,7 @@ void app_main(void)
     ESP_LOGI(TAG, "Configuring GPIO pins...");
     ESP_LOGI(TAG, "Configuring Output pins...");
     // Configure stepper direction pins as outputs
-    gpio_config_t outputPins = {
-        .pin_bit_mask = (1ULL << xStep) | (1ULL << yStep) |
-                        (1ULL << zStep) | (1ULL << eStep),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&outputPins);
+
     ESP_LOGI(TAG, "Configuring Input pins...");
     // gpio_config_t inputPins = {
     //     .pin_bit_mask = (1ULL << xSwitch) | (1ULL << ySwitch) |
@@ -331,7 +338,7 @@ void app_main(void)
     //     .intr_type = GPIO_INTR_DISABLE,
     // };
     // gpio_config(&inputPins);
- 
+
     ESP_LOGI(TAG, "GPIO pins configured successfully");
 
     // ESP_ERROR_CHECK(gpio_config(&outputPins));

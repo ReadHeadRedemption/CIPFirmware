@@ -8,8 +8,9 @@ static const char *TAG = "GCODE_PARSER";
 uint32_t feed = 0;
 
 float scale = 1.0f;
-float eScale = 0.006f;
+float eScale = 0.00005f;
 float extrude = 0.0f;
+float total_extruded = 0.0f;
 
 bool distMode = true;
 
@@ -299,7 +300,7 @@ void parse(char *line)
         {
             char *toolIndex[] = {"Conductive Ink", "Insulator Ink", "Camera", NULL};
             ESP_LOGI(TAG, "CALLING T: TOOL CHANGE TO %s", toolIndex[tool]);
-            changeTool(tool);
+            //changeTool(tool);
 
             int current_head_id = -1;
             uint32_t headID0 = -1;
@@ -321,7 +322,7 @@ void parse(char *line)
 
             while (current_head_id != tool)
             {
-                if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE)
+                if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(0)) == pdTRUE)
                 {
                     esp_io_expander_get_level(io_expander, IO_EXPANDER_PIN_NUM_0, &headID0);
                     esp_io_expander_get_level(io_expander, IO_EXPANDER_PIN_NUM_1, &headID1);

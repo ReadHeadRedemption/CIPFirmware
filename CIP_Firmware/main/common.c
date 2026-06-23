@@ -10,6 +10,7 @@ QueueHandle_t FileName = NULL;
 SemaphoreHandle_t parseSemaphore = NULL;
 SemaphoreHandle_t SDCardMutex = NULL;
 SemaphoreHandle_t i2c_mutex = NULL;
+SemaphoreHandle_t allowMove = NULL;
 
 MoveCmd_t head = {
     .target_x = 0.0f,

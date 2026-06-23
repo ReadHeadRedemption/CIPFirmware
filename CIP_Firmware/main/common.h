@@ -49,6 +49,7 @@ extern SemaphoreHandle_t TestButtonSemaphore;
 extern QueueHandle_t     FileName;
 extern SemaphoreHandle_t parseSemaphore; 
 extern SemaphoreHandle_t SDCardMutex;
+extern SemaphoreHandle_t allowMove;
 extern SemaphoreHandle_t i2c_mutex;
 
 extern esp_io_expander_handle_t io_expander;

@@ -77,10 +77,10 @@
 #define eEnable (GPIO_NUM_MAX + 11) // xxx IO Expander P13
 
 // Limit Switch Pins
-#define xSwitch (GPIO_NUM_MAX + 3) // IO Expander P10
-#define ySwitch (GPIO_NUM_MAX + 4) // IO Expander P11
-#define zSwitch (GPIO_NUM_MAX + 5)// IO Expander P12
-#define eSwitch (GPIO_NUM_MAX + 6)// IO Expander P13
+#define xSwitch (GPIO_NUM_MAX + 3) // IO Expander P3
+#define ySwitch (GPIO_NUM_MAX + 4) // IO Expander P4
+#define zSwitch (GPIO_NUM_MAX + 5) // IO Expander P5
+#define eSwitch (GPIO_NUM_MAX + 6) // IO Expander P6
 
 ////////////////////////////////////////////////////////////////////
 //
