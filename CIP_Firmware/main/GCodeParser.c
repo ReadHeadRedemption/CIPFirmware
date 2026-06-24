@@ -46,22 +46,22 @@ void readParseFile(char *fileLocation)
     {
         ESP_LOGI(TAG, "Successfully opened G-code file: %s", fileLocation);
 
-        char up[] = "G0 Z5.5 F20000";
+        // char up[] = "G0 Z5.5 F20000";
 
-        char mini_extrude[] = "G1 E40 F200";
-        // char down[] = "G0 Z0.5";
+        // char mini_extrude[] = "G1 E40 F200";
+        // // char down[] = "G0 Z0.5";
 
-        // TEMPORARY CODE FOR INITIAL EXTRUSION
-        parse(up); 
-        parse(mini_extrude);
+        // // TEMPORARY CODE FOR INITIAL EXTRUSION
+        // parse(up); 
         // parse(mini_extrude);
-        for (int i = 0; i < 10; i++)
-        {
-            parse(mini_extrude);
-            vTaskDelay(pdMS_TO_TICKS(2500));
-        }
-        // vTaskDelay(pdMS_TO_TICKS(10000));
-        // parse(down);
+        // // parse(mini_extrude);
+        // for (int i = 0; i < 10; i++)
+        // {
+        //     parse(mini_extrude);
+        //     vTaskDelay(pdMS_TO_TICKS(2500));
+        // }
+        // // vTaskDelay(pdMS_TO_TICKS(10000));
+        // // parse(down);
 
         while (fgets(line, sizeof(line), file))
         {
@@ -247,11 +247,12 @@ void parse(char *line)
 
                 total_extruded += extrude;
 
+                vTaskDelay(pdMS_TO_TICKS(100));
                 break;
             default:
                 break;
+                
             }
-            vTaskDelay(pdMS_TO_TICKS(100));
         }
         else if ((strcmp(cmd, "G2") == 0) ||
                  (strcmp(cmd, "G3") == 0))
@@ -346,6 +347,34 @@ void parse(char *line)
     }
     else if (cmd[0] == 'M')
     {
+        if (strcmp(cmd, "M118") == 0 || strcmp(cmd, "M240") == 0)
+        {
+            char data_to_receive[100];
+
+            printf(line + 5);
+            int bytes_written = 0;
+            if (strcmp(cmd, "M240") == 0)
+            {
+                printf("HERE!!");
+                char capture[] = "CAPTURE\n";
+                bytes_written = uart_write_bytes(UART_PORT_NUM, capture, strlen(capture));
+            }
+            else
+            {
+                printf(line + 5);
+                bytes_written = uart_write_bytes(UART_PORT_NUM, line + 5, strlen(line + 5));
+            }
+            // int bytes_written = uart_write_bytes(UART_PORT_NUM, data, strlen(data));
+
+            printf("%d", bytes_written);
+            printf("HELOO");
+
+            if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+            {
+                uart_read_bytes(UART_PORT_NUM, data_to_receive, event.size, portMAX_DELAY);
+                ESP_LOGI(TAG, "%s", data_to_receive);
+            }
+        }
     }
 }
 /*
