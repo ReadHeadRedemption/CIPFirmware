@@ -108,9 +108,9 @@ static void checkSwitches(void *pvParameters)
         if (levels[3] == 1)
         {
             xSemaphoreGive(eSwitchSemaphore);
-            // printf("E switch triggered\n");
+            //printf("E switch triggered\n");
         }
-        vTaskDelay(pdMS_TO_TICKS(30));
+        vTaskDelay(pdMS_TO_TICKS(19));
     }
     vTaskDelete(NULL);
 }
@@ -207,19 +207,25 @@ void testYaxis(void *pvParameters)
 
 void buttonTest(void *pvParameters)
 {
+    bool xstateFlag = false;
+    bool ystateFlag = false;
+    bool zstateFlag = false;
     while (1)
     {
-        if ((xSemaphoreTake(xSwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE))
+        if ((xSemaphoreTake(xSwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) && xstateFlag != true)
         {
             ESP_LOGI(TAG, "X Switch Pressed");
+            xstateFlag = true;
         }
-        if ((xSemaphoreTake(ySwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE))
+        if ((xSemaphoreTake(ySwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) && ystateFlag != true)
         {
             ESP_LOGI(TAG, "Y Switch Pressed");
+            ystateFlag = true;
         }
-        if ((xSemaphoreTake(zSwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE))
+        if ((xSemaphoreTake(zSwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) && zstateFlag != true)
         {
             ESP_LOGI(TAG, "Z Switch Pressed");
+            zstateFlag = true;
         }
     }
 }
@@ -367,10 +373,10 @@ void app_main(void)
     /////////////////////////////////////////////////////////////////////////
     // Initialize stepper motors
 
-    // xTaskCreate(display_task, "display_tsk", 4096, NULL, 3, NULL);
+    xTaskCreate(display_task, "display_tsk", 4096, NULL, 3, NULL);
 
     // Test Tasks
-    xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 2, NULL);
+    xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 5, NULL);
     // xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
     // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
@@ -379,7 +385,7 @@ void app_main(void)
     //  Create heater control task
     //   xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
     //   Create G-code parser task
-    // xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, NULL);
-    // xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
+    xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, NULL);
+    xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
     // ESP_LOGI(TAG, "All tasks created successfully");
 }

@@ -1,9 +1,9 @@
-// #include "stepperMotor.h"
-// #include "esp_log.h"
-// #include "driver/rmt_tx.h"
-// #include "driver/rmt_encoder.h"
-// #include "driver/gpio.h"
-// #include <math.h>
+#include "stepperMotor.h"
+#include "esp_log.h"
+#include "driver/rmt_tx.h"
+#include "driver/rmt_encoder.h"
+#include "driver/gpio.h"
+#include <math.h>
 
 // static const char *TAG = "STEPPER_RMT";
 
@@ -166,15 +166,15 @@
 
 //     return rmt_transmit(motor_channels[motor_id], motor_encoders[motor_id], &symbol, 1, &tx_config);
 // }
-// float K_FACTOR = 0.01f;
+float K_FACTOR = 0.01f;
 
-// esp_err_t changeTool(int tool)
-// {
-//     // Condutive Ink, Insulator Ink, Camera
-//     float toolKval[] = {0.01f, 0.02f, 0.0f};
-//     K_FACTOR = toolKval[tool];
-//     return ESP_OK;
-// }
+esp_err_t changeTool(int tool)
+{
+    // Condutive Ink, Insulator Ink, Camera
+    float toolKval[] = {0.01f, 0.02f, 0.0f};
+    K_FACTOR = toolKval[tool];
+    return ESP_OK;
+}
 
 // // move all motors to a organized point
 // esp_err_t coordinated_move(MoveCmd_t *move)
@@ -829,7 +829,7 @@ esp_err_t stepper_set_direction(motor_id_t motor_id, uint8_t direction)
 {
     esp_err_t err;
     if (motor_id >= NUM_MOTORS)
-        err =  ESP_ERR_INVALID_ARG;
+        err = ESP_ERR_INVALID_ARG;
     if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
     {
         // ESP_LOGI(TAG, "SET MOTOR %d: %d", motor_id, direction);
@@ -900,7 +900,7 @@ esp_err_t coordinated_move(MoveCmd_t *move)
 
     float StepPerMM[] = {xStepsPerMM, yStepsPerMM, zStepsPerMM, eStepsPerMM};
 
-    printf("hi!");
+    // printf("hi!");
 
     // 1. Calculate target steps
     float dx = move->target_x - motors[MOTOR_X].position;
@@ -1377,7 +1377,7 @@ esp_err_t homeMotors()
     // HOME X AXIS
     // ----------------------------------------------------------------
     // Flush any stale switch triggers before starting the loop
-    xSemaphoreTake(xSwitchSemaphore, 0);
+    xSemaphoreTake(xSwitchSemaphore, 1);
 
     while (!axis_homed[MOTOR_X])
     {
@@ -1392,6 +1392,11 @@ esp_err_t homeMotors()
             motors[MOTOR_X].position = 0.0f;
             homer.target_x = 0.0f; // Reset target so Y/Z moves don't go crazy
             axis_homed[MOTOR_X] = true;
+             if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+            {
+                gpio_set_level(motors[MOTOR_X].enable_pin, 0);
+                xSemaphoreGive(i2c_mutex);
+            }
             ESP_LOGI(TAG, "X axis homed");
         }
     }
@@ -1410,6 +1415,11 @@ esp_err_t homeMotors()
         {
             motors[MOTOR_Y].position = 0.0f;
             homer.target_y = 0.0f;
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+            {
+                gpio_set_level(motors[MOTOR_Y].enable_pin, 0);
+                xSemaphoreGive(i2c_mutex);
+            }
             axis_homed[MOTOR_Y] = true;
             ESP_LOGI(TAG, "Y axis homed");
         }
@@ -1427,9 +1437,14 @@ esp_err_t homeMotors()
 
         if (xSemaphoreTake(zSwitchSemaphore, 0) == pdTRUE)
         {
-            motors[MOTOR_Z].position = 0.0f;
-            homer.target_z = 0.0f;
+            motors[MOTOR_Z].position = -46.3f;
+            homer.target_z = -46.3f;
             axis_homed[MOTOR_Z] = true;
+             if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+            {
+                gpio_set_level(motors[MOTOR_Z].enable_pin, 0);
+                xSemaphoreGive(i2c_mutex);
+            }
             ESP_LOGI(TAG, "Z axis homed");
         }
     }
@@ -1437,20 +1452,20 @@ esp_err_t homeMotors()
     // Move to offset position
     homer.target_x = 33.0f;
     homer.target_y = 226.0f;
-    homer.target_z = 100.0f;
+    homer.target_z = 56.4f;
     coordinated_move(&homer);
 
-    // Set actual absolute zero
-    motors[MOTOR_X].position = 0;
-    motors[MOTOR_Y].position = 200.0f;
-    motors[MOTOR_Z].position = 100.0f;
+    // Set actual home
+    motors[MOTOR_X].position = 0.0f;
+    motors[MOTOR_Y].position = 180.0f;
+    motors[MOTOR_Z].position = 50.5f;
 
     // initalize extruder at position 0
     motors[MOTOR_E].position = 0;
 
     // Reset step counters after homing to establish new reference frame
-    for (int i = 0; i < NUM_MOTORS; i++)
-        motors[i].targetStep = 0;
+    // for (int i = 0; i < NUM_MOTORS; i++)
+    //     motors[i].targetStep = 0;
 
     ESP_LOGI(TAG, "Homed");
     return ESP_OK;

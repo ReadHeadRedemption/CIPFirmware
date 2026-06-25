@@ -41,7 +41,6 @@ void readParseFile(char *fileLocation)
         // TEMPORARY CODE FOR INITIAL EXTRUSION
         parse(up); 
         parse(mini_extrude);
-        // parse(mini_extrude);
         for (int i = 0; i < 10; i++)
         {
             parse(mini_extrude);
@@ -58,6 +57,7 @@ void readParseFile(char *fileLocation)
             parse(line);
         }
         fclose(file);
+        ESP_LOGI(TAG,"FINISH READING FILE");
     }
 }
 
