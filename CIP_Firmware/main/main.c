@@ -389,7 +389,7 @@ void app_main(void)
     // xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
     // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
-    // xTaskCreate(readSD, "testing SD Card", 4096, NULL, 1, NULL);
+    xTaskCreate(readSD, "testing SD Card", 4096, NULL, 1, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     //  Create heater control task
     //   xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);

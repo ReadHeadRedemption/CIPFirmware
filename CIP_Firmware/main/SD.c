@@ -94,25 +94,28 @@ void readSD(void *pvParameters)
     {
         printf("Reading SD card...\n");
 
-        sdmmc_card_print_info(stdout, card);
-        // print out file names to check reading
-        if (flag)
+        if (card != NULL)
         {
-            flag = false;
-            FILE *file = fopen("/sdcard/fileList.txt", "w");
-            while ((entry = readdir(dir)) != NULL)
+            sdmmc_card_print_info(stdout, card);
+            // print out file names to check reading
+            if (flag)
             {
-                char *name;
-                // Search the directory for Gcode files
-                if ((name = strstr(entry->d_name, ".GCO")) != NULL)
+                flag = false;
+                FILE *file = fopen("/sdcard/fileList.txt", "w");
+                while ((entry = readdir(dir)) != NULL)
                 {
-                    printf("%s\n", name);
-                    // store the of files in an array
-                    fprintf(file, "%s\n", entry->d_name);
-                    printf("I AM PRINTING TO THE FILE: %s\n", entry->d_name);
+                    char *name;
+                    // Search the directory for Gcode files
+                    if ((name = strstr(entry->d_name, ".GCO")) != NULL)
+                    {
+                        printf("%s\n", name);
+                        // store the of files in an array
+                        fprintf(file, "%s\n", entry->d_name);
+                        printf("I AM PRINTING TO THE FILE: %s\n", entry->d_name);
+                    }
                 }
-            }
-            fclose(file);
+                fclose(file);
+            } 
         }
         vTaskDelay(10000 / portTICK_PERIOD_MS); // Delay for 1 second
     }

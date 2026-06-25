@@ -331,7 +331,35 @@ void parse(char *line)
         }
     }
     else if (cmd[0] == 'M')
-    {
+    {      
+        if (strcmp(cmd, "M118") == 0 || strcmp(cmd, "M240") == 0)
+        {
+            char data_to_receive[100];
+
+            printf(line + 5);
+            int bytes_written = 0;
+            if (strcmp(cmd, "M240") == 0)
+            {
+                printf("HERE!!");
+                char capture[] = "CAPTURE\n";
+                bytes_written = uart_write_bytes(UART_NUM_1, capture, strlen(capture));
+            }
+            else
+            {
+                printf(line + 5);
+                bytes_written = uart_write_bytes(UART_NUM_1, line + 5, strlen(line + 5));
+            }
+            // int bytes_written = uart_write_bytes(UART_PORT_NUM, data, strlen(data));
+
+            printf("%d", bytes_written);
+            printf("HELOO");
+
+            if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+            {
+                uart_read_bytes(UART_NUM_1, data_to_receive, event.size, portMAX_DELAY);
+                ESP_LOGI(TAG, "%s", data_to_receive);
+            }
+        }
     }
     else if (cmd[0] == 'T') // tool change commands
     {
