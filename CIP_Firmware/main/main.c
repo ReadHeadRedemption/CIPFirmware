@@ -395,6 +395,6 @@ void app_main(void)
     //   xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
     //   Create G-code parser task
     xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, &parserHandle);
-    // xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
+    xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
     // ESP_LOGI(TAG, "All tasks created successfully");
 }
