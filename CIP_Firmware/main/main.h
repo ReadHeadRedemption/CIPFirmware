@@ -28,6 +28,9 @@
 //Display Headers
 #include "display.h"
 
+//SD Card Headers
+#include "SD.h"
+
 //Included to host files on esp32 memory for testing purposes, 
 //will be removed when SD card is implemented
 #include "esp_spiffs.h"

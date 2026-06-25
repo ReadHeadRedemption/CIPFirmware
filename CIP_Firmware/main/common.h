@@ -7,7 +7,10 @@
 #include "driver/gpio.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_io_expander_gpio_wrapper.h"
 #include "pins.h"
+#include "IOExpander.h"
+#include "driver/uart.h"
 
 //Include RTOS Headers for real time management of the firmware
 #include "freertos/FreeRTOS.h"
@@ -37,6 +40,9 @@ typedef struct {
 
 extern MoveCmd_t head;
 
+extern QueueHandle_t uart_queue;
+extern uart_event_t event;
+
 // Semaphores
 extern SemaphoreHandle_t xSwitchSemaphore;
 extern SemaphoreHandle_t ySwitchSemaphore;
@@ -44,6 +50,13 @@ extern SemaphoreHandle_t zSwitchSemaphore;
 extern SemaphoreHandle_t eSwitchSemaphore;
 extern SemaphoreHandle_t StartButtonSemaphore;
 extern SemaphoreHandle_t TestButtonSemaphore;
+extern QueueHandle_t     FileName;
 extern SemaphoreHandle_t parseSemaphore; 
+extern SemaphoreHandle_t SDCardMutex;
+extern SemaphoreHandle_t allowMove;
+extern SemaphoreHandle_t i2c_mutex;
+
+extern esp_io_expander_handle_t io_expander;
+
 
 #endif 
