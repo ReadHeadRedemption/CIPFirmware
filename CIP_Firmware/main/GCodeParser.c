@@ -360,6 +360,14 @@ void parse(char *line)
                 ESP_LOGI(TAG, "%s", data_to_receive);
             }
         }
+        else if (strcmp(cmd, "M140") == 0)
+        {
+            ESP_LOGI(TAG,"SET BED TEMP x DEGREES");
+        }
+        else if (strcmp(cmd, "190") == 0)
+        {
+            ESP_LOGI(TAG, "WAIT FOR BED TO REACH x DEGREES");
+        }
     }
     else if (cmd[0] == 'T') // tool change commands
     {
@@ -396,10 +404,10 @@ void parse(char *line)
                     vTaskDelay(10);
                 } // Trap it here so it doesn't crash
             }
-
-            while (current_head_id != tool)
+            int headID = readHeadState();
+            while (headID != tool)
             {
-                xSemaphoreGive(nohead); 
+                headID = readHeadState();
                 vTaskDelay(pdMS_TO_TICKS(100));
             }
             ESP_LOGI(TAG, "Tool change successful.");

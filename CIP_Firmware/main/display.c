@@ -480,7 +480,7 @@ void test_screen(void)
     lv_obj_set_width(headID, LCD_H_RES - 20);
     lv_obj_set_style_text_align(headID, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(headID, lv_color_black(), 0);
-    lv_label_set_text_fmt(headID, "Current Head ID: %d", current_head_id);
+    lv_label_set_text_fmt(headID, "Current Head ID: %d", readHeadState());
     lv_obj_align(headID, LV_ALIGN_TOP_MID, 0, 10);
 
     lvgl_port_unlock();

@@ -139,20 +139,24 @@ static void console_task(void *arg)
             ESP_LOGI(TAG, "Test command received");
         }
         // Process line
-        if (strcmp(line, "home") == 0)
+        else if (strcmp(line, "home") == 0)
         {
             homeMotors();
         }
-        if (strcmp(line, "sdinfo") == 0)
+        else if (strcmp(line, "sdinfo") == 0)
         {
             sdInfo();
         }
         else if (strcmp(line, "stop") == 0)
         {
-            char pullup[] = "G1 E-600";
             vTaskSuspend(parserHandle);
-            parse(pullup);
+            parse("G1 E-600");
             ESP_LOGI(TAG, "STOPPING");
+        }
+        else if (strcmp(line, "head?") == 0)
+        {
+            int state = readHeadState();
+            printf("TOOL HEAD: %d", state);
         }
         else
         {
@@ -394,7 +398,7 @@ void app_main(void)
     // xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
     // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
-    xTaskCreate(readSD, "testing SD Card", 4096, NULL, 1, NULL);
+    //xTaskCreate(readSD, "testing SD Card", 4096, NULL, 1, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     //  Create heater control task
     //   xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);

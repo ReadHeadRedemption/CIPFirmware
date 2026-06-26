@@ -12,5 +12,6 @@ extern esp_io_expander_handle_t io_expander;
 esp_err_t init_io_expander();
 void printExpanderState(void *pvParameters);
 extern int current_head_id;
-void readHeadState(void *pvParameters);
+int readHeadState();
+
 #endif // IO_EXPANDER_H
