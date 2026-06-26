@@ -132,14 +132,18 @@ static void console_task(void *arg)
             linenoiseFree(line);
             continue; // Empty line
         }
+        else if (strcmp(line, "test") == 0)
+        {
+            ESP_LOGI(TAG, "Test command received");
+        }
         // Process line
         if (strcmp(line, "home") == 0)
         {
             homeMotors();
         }
-        else if (strcmp(line, "test") == 0)
+        if (strcmp(line, "sdinfo") == 0)
         {
-            ESP_LOGI(TAG, "Test command received");
+            sdInfo();
         }
         else
         {
@@ -316,6 +320,7 @@ void app_main(void)
     zSwitchSemaphore = xSemaphoreCreateBinary();
     eSwitchSemaphore = xSemaphoreCreateBinary();
     allowMove = xSemaphoreCreateBinary();
+    nohead = xSemaphoreCreateBinary();
 
     // Mutexes
     SDCardMutex = xSemaphoreCreateMutex();

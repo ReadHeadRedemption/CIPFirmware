@@ -10,7 +10,10 @@
 #include "common.h"
 
 esp_err_t initializeSD();
-void readSD(void *pvParameters);
+esp_err_t deinitializeSD();
+esp_err_t refreshSD();
+void readSD();
+void sdInfo();
 
 
 #endif

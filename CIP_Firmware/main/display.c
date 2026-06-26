@@ -1,5 +1,7 @@
 // Simple LVGL + ILI9341 + XPT2046 display driver for testing
 #include "display.h"
+#include "SD.h"
+#include "IOExpander.h"
 
 static const char *TAG = "DISPLAY";
 
@@ -90,10 +92,71 @@ static void print_button_cb(lv_event_t *e)
 static void refresh_sd_cb(lv_event_t *e)
 {
     if (!lvgl_port_lock(0))
+    {
         return;
+    }
 
-    ESP_LOGI(TAG, "Refreshing SD card file list...");
-    // You can add SD card refresh logic here if needed
+    ESP_LOGI(TAG, "Refreshing SD card file list on display...");
+
+    deinitializeSD(); 
+
+esp_err_t ret = initializeSD();
+if (ret == ESP_OK) {
+    readSD();
+}
+
+    // 1. Prepare a buffer for the roller options
+    char options_buf[1024] = "";
+
+    // 2. Open your file
+    FILE *f = fopen("/sdcard/fileList.txt", "r");
+
+    if (f != NULL)
+    {
+        char line[128];
+        bool first_line = true;
+
+        // 3. Read the file line by line
+        while (fgets(line, sizeof(line), f) != NULL)
+        {
+            // Strip any existing newline/carriage returns
+            line[strcspn(line, "\r\n")] = 0;
+
+            // Ignore empty lines
+            if (strlen(line) > 0)
+            {
+                // If it's not the first line, add LVGL's required newline separator
+                if (!first_line)
+                {
+                    strcat(options_buf, "\n");
+                }
+
+                // Be careful not to exceed options_buf limits
+                if (strlen(options_buf) + strlen(line) < sizeof(options_buf) - 1)
+                {
+                    strcat(options_buf, line);
+                    first_line = false;
+                }
+            }
+        }
+        fclose(f);
+    }
+
+    // Fallback just in case the file couldn't be read or is empty
+    if (strlen(options_buf) == 0)
+    {
+        strcpy(options_buf, "No files found\nCheck SD Card");
+    }
+
+    // 4. Update the existing roller globally!
+    if (gcode_roller_global != NULL)
+    {
+        lv_roller_set_options(gcode_roller_global, options_buf, LV_ROLLER_MODE_NORMAL);
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Roller is NULL, cannot update!");
+    }
 
     lvgl_port_unlock();
 }
@@ -146,6 +209,7 @@ void printDisplay(void)
     char options_buf[1024] = "";
 
     // 2. Open your file
+    printf("I AM OPENING THE FILE");
     FILE *f = fopen("/sdcard/fileList.txt", "r");
 
     if (f != NULL)
@@ -411,7 +475,31 @@ void test_screen(void)
     lv_obj_set_style_text_color(negZlabel, lv_color_black(), 0);
     lv_obj_add_event_cb(negZmove, zNeg_event_cb, LV_EVENT_CLICKED, NULL);
 
+    lv_obj_t *headID = lv_label_create(testScreen);
+    // Head ID
+    lv_obj_set_width(headID, LCD_H_RES - 20);
+    lv_obj_set_style_text_align(headID, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(headID, lv_color_black(), 0);
+    lv_label_set_text_fmt(headID, "Current Head ID: %d", current_head_id);
+    lv_obj_align(headID, LV_ALIGN_TOP_MID, 0, 10);
+
     lvgl_port_unlock();
+}
+
+// Make the label pointer global or accessible to your GPIO polling/interrupt logic
+lv_obj_t *headID;
+int ID = 0;
+
+void create_my_screen(void)
+{
+    headID = lv_label_create(testScreen);
+    lv_obj_set_width(headID, LCD_H_RES - 20);
+    lv_obj_set_style_text_align(headID, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(headID, lv_color_black(), 0);
+    lv_obj_align(headID, LV_ALIGN_TOP_MID, 0, 10);
+
+    // USE THIS for formatted strings!
+    lv_label_set_text_fmt(headID, "Current Head ID: %d", ID);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -438,6 +526,13 @@ void display_update_status(const char *text)
 
 static void tstscr(lv_event_t *e)
 {
+    //  if (!lvgl_port_lock(0))
+    //     return;
+    // if (testScreen)
+    // {
+    //     lv_scr_load(testScreen);
+    // }
+    // lvgl_port_unlock();
     test_screen();
 }
 

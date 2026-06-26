@@ -14,6 +14,7 @@ SemaphoreHandle_t parseSemaphore = NULL;
 SemaphoreHandle_t SDCardMutex = NULL;
 SemaphoreHandle_t i2c_mutex = NULL;
 SemaphoreHandle_t allowMove = NULL;
+SemaphoreHandle_t nohead = NULL;
 
 MoveCmd_t head = {
     .target_x = 0.0f,

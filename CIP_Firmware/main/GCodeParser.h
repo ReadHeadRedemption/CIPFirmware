@@ -24,6 +24,6 @@ typedef enum {
 void readParseFile(char *fileLocation);
 void parse(char *line);
 
-
+extern int current_head_id;
 
 #endif

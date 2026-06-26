@@ -60,3 +60,29 @@ void printExpanderState(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }
+
+int id0 = -1;
+int id1 = -1;
+int current_head_id = -1;
+uint32_t headID0 = -1;
+uint32_t headID1 = -1;
+
+void readHeadState(void *pvParameters)
+{
+    while (1)
+    {
+        if ((xSemaphoreTake(nohead, portMAX_DELAY) == pdTRUE))
+        {
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+            {
+                esp_io_expander_get_level(io_expander, IO_EXPANDER_PIN_NUM_0, &headID0);
+                esp_io_expander_get_level(io_expander, IO_EXPANDER_PIN_NUM_1, &headID1);
+                xSemaphoreGive(i2c_mutex);
+            }
+            id0 = (int)headID0;
+            id1 = (int)headID1;
+            current_head_id = ((id1 << 1) | id0);
+        }
+    }
+    vTaskDelay(pdMS_TO_TICKS(101));
+}

@@ -358,13 +358,6 @@ void parse(char *line)
             ESP_LOGI(TAG, "CALLING T: TOOL CHANGE TO %s", toolIndex[tool]);
             //changeTool(tool);
 
-            int current_head_id = -1;
-            uint32_t headID0 = -1;
-            uint32_t headID1 = -1;
-            int id0 = -1;
-            int id1 = -1;
-            uint32_t pin_levels = -1;
-
             // 2. Fixed IO Check Loop
             ESP_LOGI(TAG, "Address of handle: %p", (void *)io_expander);
             if (io_expander == NULL)
@@ -378,18 +371,8 @@ void parse(char *line)
 
             while (current_head_id != tool)
             {
-                if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(0)) == pdTRUE)
-                {
-                    esp_io_expander_get_level(io_expander, IO_EXPANDER_PIN_NUM_0, &headID0);
-                    esp_io_expander_get_level(io_expander, IO_EXPANDER_PIN_NUM_1, &headID1);
-                    xSemaphoreGive(i2c_mutex);
-                }
-
-                id0 = (int)headID0;
-                id1 = (int)headID1;
-                current_head_id = ((id1 << 1) | id0);
-                //esp_task_wdt_reset();
-                vTaskDelay(pdMS_TO_TICKS(10));
+                xSemaphoreGive(nohead); 
+                vTaskDelay(pdMS_TO_TICKS(100));
             }
             ESP_LOGI(TAG, "Tool change successful.");
         }
