@@ -24,6 +24,8 @@ Limit Switch Interrupts -- Homeing function
 char *tempFile = "main\\sample.gcode";
 char *spiffs_file = "/spiffs/sample.gcode";
 
+TaskHandle_t parserHandle = NULL;
+
 ///////////////////////////////////////////////////////////////////////////////
 //
 //                          TASKS
@@ -144,6 +146,13 @@ static void console_task(void *arg)
         if (strcmp(line, "sdinfo") == 0)
         {
             sdInfo();
+        }
+        else if (strcmp(line, "stop") == 0)
+        {
+            char pullup[] = "G1 E-600";
+            vTaskSuspend(parserHandle);
+            parse(pullup);
+            ESP_LOGI(TAG, "STOPPING");
         }
         else
         {
@@ -385,12 +394,12 @@ void app_main(void)
     // xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
     // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
-    // xTaskCreate(readSD, "testing SD Card", 4096, NULL, 1, NULL);
+    xTaskCreate(readSD, "testing SD Card", 4096, NULL, 1, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     //  Create heater control task
     //   xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
     //   Create G-code parser task
-    xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, NULL);
+    xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, &parserHandle);
     xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
     // ESP_LOGI(TAG, "All tasks created successfully");
 }
