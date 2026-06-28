@@ -31,16 +31,16 @@ TaskHandle_t parserHandle = NULL;
 //                          TASKS
 //
 ///////////////////////////////////////////////////////////////////////////////
-void HeaterControl(void *pvParameters)
-{
-    while (1)
-    {
-        // Read temperature from ADC
-        // Compare with desired temperature
-        // Control SSR accordingly
-        vTaskDelay(100 / portTICK_PERIOD_MS); // Delay for 100ms
-    }
-}
+// void HeaterControl(void *pvParameters)
+// {
+//     while (1)
+//     {
+//         // Read temperature from ADC
+//         // Compare with desired temperature
+//         // Control SSR accordingly
+//         vTaskDelay(100 / portTICK_PERIOD_MS); // Delay for 100ms
+//     }
+// }
 
 void parserTask(void *pvParameters)
 {
@@ -391,7 +391,11 @@ void app_main(void)
     /////////////////////////////////////////////////////////////////////////
     // Initialize stepper motors
 
-    xTaskCreate(display_task, "display_tsk", 4096, NULL, 3, NULL);
+    // xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 3, NULL, 1);
+
+    display_init();
+    
+    heater_init();
 
     // Test Tasks
     xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 5, NULL);
@@ -400,9 +404,9 @@ void app_main(void)
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     //  Create heater control task
-    //   xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);
+    // xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
     //   Create G-code parser task
     xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, &parserHandle);
-    xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
+    // xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
     // ESP_LOGI(TAG, "All tasks created successfully");
 }

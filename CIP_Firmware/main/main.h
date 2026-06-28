@@ -35,4 +35,6 @@
 //will be removed when SD card is implemented
 #include "esp_spiffs.h"
 
+#include "heater.h"
+
 #endif

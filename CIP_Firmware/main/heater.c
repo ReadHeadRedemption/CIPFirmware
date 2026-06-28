@@ -1,12 +1,13 @@
 #include "heater.h"
+#include "esp_lvgl_port.h"
 
 static const char *TAG = "HEATER";
 
 // ── MAX31865 SPI ─────────────────────────────────────────────
-#define MAX31865_CS_PIN     GPIO_NUM_5   // placeholder
-#define MAX31865_MOSI_PIN   GPIO_NUM_11  // placeholder
-#define MAX31865_MISO_PIN   GPIO_NUM_13  // placeholder
-#define MAX31865_CLK_PIN    GPIO_NUM_12  // placeholder
+#define MAX31865_CS_PIN     RTDCS   // placeholder
+#define MAX31865_MOSI_PIN   MOSI  // placeholder
+#define MAX31865_MISO_PIN   MISO  // placeholder
+#define MAX31865_CLK_PIN    SCK  // placeholder
 
 // MAX31865 registers
 #define MAX31865_CONFIG_REG         0x00
@@ -28,15 +29,18 @@ static spi_device_handle_t max31865_spi;
 // ── SPI helpers ───────────────────────────────────────────────
 static esp_err_t max31865_write_reg(uint8_t reg, uint8_t value)
 {
+    lvgl_port_lock(0);
     spi_transaction_t t = {
         .length    = 16,
         .tx_buffer = (uint8_t[]){ reg | 0x80, value },
     };
+    lvgl_port_unlock();
     return spi_device_transmit(max31865_spi, &t);
 }
 
 static esp_err_t max31865_read_reg(uint8_t reg, uint8_t *out, size_t len)
 {
+    lvgl_port_lock(0);
     uint8_t tx[len + 1];
     uint8_t rx[len + 1];
     memset(tx, 0, sizeof(tx));
@@ -50,6 +54,7 @@ static esp_err_t max31865_read_reg(uint8_t reg, uint8_t *out, size_t len)
     esp_err_t err = spi_device_transmit(max31865_spi, &t);
     if (err == ESP_OK)
         memcpy(out, &rx[1], len);
+    lvgl_port_unlock();
     return err;
 }
 
@@ -75,25 +80,25 @@ static float max31865_read_temperature(void)
 esp_err_t heater_init(void)
 {
     // SSR pin
-    gpio_config_t ssr_conf = {
-        .pin_bit_mask = (1ULL << SSR_PIN),
-        .mode         = GPIO_MODE_OUTPUT,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .pull_up_en   = GPIO_PULLUP_DISABLE,
-        .intr_type    = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&ssr_conf);
-    gpio_set_level(SSR_PIN, 0);  // SSR off by default
+    // gpio_config_t ssr_conf = {
+    //     .pin_bit_mask = (1ULL << SSR_PIN),
+    //     .mode         = GPIO_MODE_OUTPUT,
+    //     .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    //     .pull_up_en   = GPIO_PULLUP_DISABLE,
+    //     .intr_type    = GPIO_INTR_DISABLE,
+    // };
+    // gpio_config(&ssr_conf);
+    // gpio_set_level(SSR_PIN, 0);  // SSR off by default
 
     // SPI bus
-    spi_bus_config_t bus_cfg = {
-        .mosi_io_num   = MAX31865_MOSI_PIN,
-        .miso_io_num   = MAX31865_MISO_PIN,
-        .sclk_io_num   = MAX31865_CLK_PIN,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-    };
-    ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &bus_cfg, SPI_DMA_CH_AUTO));
+    // spi_bus_config_t bus_cfg = {
+    //     .mosi_io_num   = MAX31865_MOSI_PIN,
+    //     .miso_io_num   = MAX31865_MISO_PIN,
+    //     .sclk_io_num   = MAX31865_CLK_PIN,
+    //     .quadwp_io_num = -1,
+    //     .quadhd_io_num = -1,
+    // };
+    // ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &bus_cfg, SPI_DMA_CH_AUTO));
 
     // MAX31865 device
     spi_device_interface_config_t dev_cfg = {
@@ -102,7 +107,7 @@ esp_err_t heater_init(void)
         .spics_io_num   = MAX31865_CS_PIN,
         .queue_size     = 1,
     };
-    ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &dev_cfg, &max31865_spi));
+    ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &dev_cfg, &max31865_spi));
 
     // Configure MAX31865: V_BIAS on, auto conversion, 2/4-wire, 60Hz filter
     uint8_t config = MAX31865_CONFIG_VBIAS_ON |
@@ -115,19 +120,21 @@ esp_err_t heater_init(void)
 }
 
 // ── HeaterControl Task ────────────────────────────────────────
-void HeaterControl(void *pvParameters)
+void HeaterControl()
 {
-    float target_temp = *(float *)pvParameters;
+    float target_temp = 180;
     ESP_LOGI(TAG, "Heater task started — target: %.1f°C", target_temp);
 
     while (1)
     {
         float current_temp = max31865_read_temperature();
 
+        printf("CURRENT TEMPERATURE: %f\n", current_temp);
+
         if (current_temp < -900.0f)
         {
             // Sensor fault — shut off heater for safety
-            gpio_set_level(SSR_PIN, 0);
+            // gpio_set_level(SSR_PIN, 0);
             ESP_LOGE(TAG, "Sensor fault — heater disabled");
         }
         else
@@ -135,12 +142,12 @@ void HeaterControl(void *pvParameters)
             // Bang-bang with hysteresis
             if (current_temp < (target_temp - HEATER_HYSTERESIS))
             {
-                gpio_set_level(SSR_PIN, 1);  // heat on
+                // gpio_set_level(SSR_PIN, 1);  // heat on
                 ESP_LOGD(TAG, "Heater ON  — %.2f°C / %.1f°C", current_temp, target_temp);
             }
             else if (current_temp >= (target_temp + HEATER_HYSTERESIS))
             {
-                gpio_set_level(SSR_PIN, 0);  // heat off
+                // gpio_set_level(SSR_PIN, 0);  // heat off
                 ESP_LOGD(TAG, "Heater OFF — %.2f°C / %.1f°C", current_temp, target_temp);
             }
             // within hysteresis band — hold current SSR state

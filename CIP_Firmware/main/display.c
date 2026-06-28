@@ -167,10 +167,8 @@ void printDisplay(void)
     if (!lvgl_port_lock(0))
         return;
 
-    ESP_LOGI(TAG, "Switching to print screen...");
-
-    lv_obj_t *printScreen = lv_obj_create(NULL);
-    lv_scr_load(printScreen);
+    printScreen = lv_obj_create(NULL);
+    // lv_scr_load(printScreen);
 
     lv_obj_set_style_text_font(printScreen, &lv_font_montserrat_14, 0);
 
@@ -383,10 +381,8 @@ void test_screen(void)
     if (!lvgl_port_lock(0))
         return;
 
-    ESP_LOGI(TAG, "Switching to test screen...");
-
-    lv_obj_t *testScreen = lv_obj_create(NULL);
-    lv_scr_load(testScreen);
+    testScreen = lv_obj_create(NULL);
+    // lv_scr_load(testScreen);
 
     // Set a standard antialiased font.
     lv_obj_set_style_text_font(testScreen, &lv_font_montserrat_14, 0);
@@ -552,21 +548,38 @@ void display_update_status(const char *text)
 //
 ///////////////////////////////////////////////////////////////////////////
 
-static void tstscr(lv_event_t *e)
+static void switch_to_test_screen(lv_event_t *e)
 {
-    //  if (!lvgl_port_lock(0))
-    //     return;
-    // if (testScreen)
-    // {
-    //     lv_scr_load(testScreen);
-    // }
-    // lvgl_port_unlock();
-    test_screen();
+     if (!lvgl_port_lock(0))
+        return;
+
+    ESP_LOGI(TAG, "Switching to test screen...");
+    if (testScreen)
+    {
+        lv_scr_load(testScreen);
+    }
+    else
+    {
+        printf("yeah it's null");
+    }
+    lvgl_port_unlock();
 }
 
 static void prntscr(lv_event_t *e)
 {
-    printDisplay();
+    if (!lvgl_port_lock(0))
+        return;
+
+    ESP_LOGI(TAG, "Switching to print screen...");
+    if (printScreen)
+    {
+        lv_scr_load(printScreen);
+    }
+    else
+    {
+        printf("yeah it's null");
+    }
+    lvgl_port_unlock();
 }
 
 void display_init(void)
@@ -713,8 +726,11 @@ void display_init(void)
     // CHANGED: Button text color to black
     lv_obj_set_style_text_color(tstbtnlabel, lv_color_black(), 0);
 
+    // Create test screen
+    test_screen();
+
     // simple event handler: increment counter and update status
-    lv_obj_add_event_cb(tstbtn, tstscr, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(tstbtn, switch_to_test_screen, LV_EVENT_CLICKED, NULL);
 
     // PRINT FILES BUTTON
     lv_obj_t *prntbtn = lv_btn_create(scr);
@@ -724,6 +740,9 @@ void display_init(void)
     lv_label_set_text(prntbtnlabel, "PRINT");
 
     lv_obj_set_style_text_color(prntbtnlabel, lv_color_black(), 0);
+
+    // Create print screen
+    printDisplay();
 
     lv_obj_add_event_cb(prntbtn, prntscr, LV_EVENT_CLICKED, NULL);
 
@@ -744,7 +763,6 @@ void display_init(void)
 
 void display_task(void *pvParameters)
 {
-    display_init();
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(500));

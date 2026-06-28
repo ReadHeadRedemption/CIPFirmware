@@ -10,7 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define SSR_PIN             GPIO_NUM_4   // placeholder — swap to real pin
+// #define SSR_PIN             GPIO_NUM_4   // placeholder — swap to real pin
 
 #define HEATER_HYSTERESIS   2.0f         // ±2°C dead band to prevent rapid switching
 
@@ -18,5 +18,5 @@
 esp_err_t heater_init(void);
 
 // FreeRTOS task — pass target temp as float* via pvParameters
-void HeaterControl(void *pvParameters);
+void HeaterControl();
 #endif // HEATER_CONTROL_H
