@@ -75,6 +75,10 @@ int readHeadState()
         xSemaphoreGive(i2c_mutex);
     }
     id0 = (int)headID0;
+    printf("HEADID0: %d\n", id0);
     id1 = (int)headID1;
-    return current_head_id = ((id1 << 1) | id0);
+    printf("HEADID1: %d\n", id1);
+    current_head_id = (id1 + id0);
+    printf("HEADID: %d\n", current_head_id);
+    return current_head_id;
 }

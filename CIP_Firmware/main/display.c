@@ -98,12 +98,13 @@ static void refresh_sd_cb(lv_event_t *e)
 
     ESP_LOGI(TAG, "Refreshing SD card file list on display...");
 
-    deinitializeSD(); 
+    deinitializeSD();
 
-esp_err_t ret = initializeSD();
-if (ret == ESP_OK) {
-    readSD();
-}
+    esp_err_t ret = initializeSD();
+    if (ret == ESP_OK)
+    {
+        readSD();
+    }
 
     // 1. Prepare a buffer for the roller options
     char options_buf[1024] = "";
@@ -277,6 +278,14 @@ void printDisplay(void)
 //                          TEST SCREEN
 //
 ///////////////////////////////////////////////////////////////////////////
+
+// static void checkHead(lv_event_t *e)
+// {
+//     lv_obj_t *headID = (lv_obj_t *)lv_event_get_user_data(e);
+//     lv_label_set_text_fmt(headID, "Current Head ID: %d", readHeadState());
+//     printf("LABEL SHOULD UPDATE\n");
+// }
+
 static void tstbtn_event_cb(lv_event_t *e)
 {
     if (!lvgl_port_lock(0))
@@ -289,13 +298,11 @@ static void parsebtn_event_cb(lv_event_t *e)
 {
     if (!lvgl_port_lock(0))
         return;
-    char buf[64];
-    snprintf(buf, sizeof(buf), "PARSE GCODE");
-    if (StartButtonSemaphore)
-    {
-        xSemaphoreGive(StartButtonSemaphore);
-    }
-    lv_label_set_text(g_status_label, buf);
+    //readHeadState();
+    // checkHead(e);
+    lv_obj_t *headID = (lv_obj_t *)lv_event_get_user_data(e);
+    lv_label_set_text_fmt(headID, "Current Head ID:\n %d", readHeadState());
+    printf("Checking Head ID\n");
     lvgl_port_unlock();
 }
 
@@ -381,125 +388,146 @@ void test_screen(void)
     lv_obj_t *testScreen = lv_obj_create(NULL);
     lv_scr_load(testScreen);
 
-    // Set a standard antialiased font. Removed subpx fonts as they look terrible when rotated.
-    // #if LV_FONT_MONTSERRAT_16
-    //     lv_obj_set_style_text_font(scr, &lv_font_montserrat_16, 0);
-    // #elif LV_FONT_MONTSERRAT_14
+    // Set a standard antialiased font.
     lv_obj_set_style_text_font(testScreen, &lv_font_montserrat_14, 0);
-    // #endif
-
     lv_obj_set_style_bg_color(testScreen, lv_color_white(), 0);
     lv_obj_set_style_text_color(testScreen, lv_color_black(), 0);
 
+    // ====================================================
+    // 1. HEADER AREA (Y: 10 to 50)
+    // ====================================================
+    
+    // Status Label (Top Left)
     lv_obj_t *status_label = lv_label_create(testScreen);
-    lv_obj_set_width(status_label, LCD_H_RES - 20);
-    lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_color(status_label, lv_color_black(), 0);
-    lv_label_set_text(status_label, "Test screen\nPress HOME to return");
-    lv_obj_align(status_label, LV_ALIGN_TOP_MID, 0, 10);
+    lv_label_set_text(status_label, "Test Screen");
+    lv_obj_align(status_label, LV_ALIGN_TOP_LEFT, 15, 20);
 
-    // Create Back Button
-
+    // Back Button (Top Right)
     lv_obj_t *back_btn = lv_btn_create(testScreen);
-    lv_obj_set_size(back_btn, 50, 40);
-    lv_obj_align(back_btn, LV_ALIGN_CENTER, 60, -60);
+    lv_obj_set_size(back_btn, 80, 40);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_RIGHT, -15, 10); 
     lv_obj_t *back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, "HOME");
+    lv_label_set_text(back_label, "BACK");
     lv_obj_set_style_text_color(back_label, lv_color_black(), 0);
+    lv_obj_center(back_label);
     lv_obj_add_event_cb(back_btn, home_screen_cb, LV_EVENT_CLICKED, NULL);
 
-    // Create Parseing Gcode Button
-    lv_obj_t *parse_btn = lv_btn_create(testScreen);
-    lv_obj_set_size(parse_btn, 100, 40);
-    lv_obj_align(parse_btn, LV_ALIGN_CENTER, -50, 0);
-    lv_obj_t *parse_label = lv_label_create(parse_btn);
-    lv_label_set_text(parse_label, "Parse \nGcode");
-    lv_obj_set_style_text_color(parse_label, lv_color_black(), 0);
-    lv_obj_add_event_cb(parse_btn, parsebtn_event_cb, LV_EVENT_CLICKED, NULL);
+    // ====================================================
+    // 2. INFO AREA (Y: 60)
+    // ====================================================
+    
+    // Head ID Label (Moved up to save space)
+    lv_obj_t *headID = lv_label_create(testScreen);
+    lv_obj_set_width(headID, LCD_H_RES - 30);
+    lv_obj_set_style_text_align(headID, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(headID, lv_color_black(), 0);
+    lv_label_set_text_fmt(headID, "Current Head ID:\n%d", readHeadState());
+    lv_obj_align(headID, LV_ALIGN_TOP_MID, 0, 60);
 
-    // Create Test Button
+    // ====================================================
+    // 3. ACTION BUTTONS (Y: 120 to 235)
+    // ====================================================
+    
+    // Check Head Button
+    lv_obj_t *parse_btn = lv_btn_create(testScreen);
+    lv_obj_set_size(parse_btn, 130, 50);
+    lv_obj_align(parse_btn, LV_ALIGN_TOP_MID, -75, 120); // Moved up to 120
+    lv_obj_t *parse_label = lv_label_create(parse_btn);
+    lv_label_set_text(parse_label, "CHECK\nHEAD");
+    lv_obj_set_style_text_align(parse_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(parse_label, lv_color_black(), 0);
+    lv_obj_center(parse_label);
+    lv_obj_add_event_cb(parse_btn, parsebtn_event_cb, LV_EVENT_CLICKED, headID);
+
+    // Test Homing Button
     lv_obj_t *tst_btn = lv_btn_create(testScreen);
-    lv_obj_set_size(tst_btn, 100, 40);
-    lv_obj_align(tst_btn, LV_ALIGN_CENTER, 50, 0);
+    lv_obj_set_size(tst_btn, 130, 50);
+    lv_obj_align(tst_btn, LV_ALIGN_TOP_MID, 75, 120); // Moved up to 120
     lv_obj_t *tst_label = lv_label_create(tst_btn);
-    lv_label_set_text(tst_label, "TEST \nHOMING");
+    lv_label_set_text(tst_label, "TEST\nHOMING");
+    lv_obj_set_style_text_align(tst_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(tst_label, lv_color_black(), 0);
+    lv_obj_center(tst_label);
     lv_obj_add_event_cb(tst_btn, tstbtn_event_cb, LV_EVENT_CLICKED, NULL);
 
-    // Create Increment Buttons
+    // Purge Button 
+    lv_obj_t *purge = lv_btn_create(testScreen);
+    lv_obj_set_size(purge, 280, 50);
+    lv_obj_align(purge, LV_ALIGN_TOP_MID, 0, 185); // Tucked closely under Actions
+    lv_obj_t *purgelabel = lv_label_create(purge);
+    lv_label_set_text(purgelabel, "PURGE");
+    lv_obj_set_style_text_color(purgelabel, lv_color_black(), 0);
+    lv_obj_center(purgelabel);
+    lv_obj_add_event_cb(purge, NULL, LV_EVENT_CLICKED, NULL);
+
+    // ====================================================
+    // 4. MOVEMENT GRID (Y: 260 to 395) 
+    // Max height reached: 395px (85px of safety margin)
+    // ====================================================
+    
+    int move_btn_w = 85;
+    int move_btn_h = 60; // Taller for easier tapping
+    int gap_x = 95;      // Slightly tighter horizontal spacing
+
+    // --- POSITIVE MOVES (Top Row) ---
     lv_obj_t *posXmove = lv_btn_create(testScreen);
-    lv_obj_set_size(posXmove, 60, 40);
-    lv_obj_align(posXmove, LV_ALIGN_CENTER, -70, 60);
+    lv_obj_set_size(posXmove, move_btn_w, move_btn_h);
+    lv_obj_align(posXmove, LV_ALIGN_TOP_MID, -gap_x, 260); // Starting at 260 instead of 300
     lv_obj_t *posXlabel = lv_label_create(posXmove);
-    lv_label_set_text(posXlabel, "MOVE \n+10X");
+    lv_label_set_text(posXlabel, "+10 X");
     lv_obj_set_style_text_color(posXlabel, lv_color_black(), 0);
+    lv_obj_center(posXlabel);
     lv_obj_add_event_cb(posXmove, xPos_event_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *negXmove = lv_btn_create(testScreen);
-    lv_obj_set_size(negXmove, 60, 40);
-    lv_obj_align(negXmove, LV_ALIGN_CENTER, -70, 110);
-    lv_obj_t *negXlabel = lv_label_create(negXmove);
-    lv_label_set_text(negXlabel, "MOVE \n-10X");
-    lv_obj_set_style_text_color(negXlabel, lv_color_black(), 0);
-    lv_obj_add_event_cb(negXmove, xNeg_event_cb, LV_EVENT_CLICKED, NULL);
-
     lv_obj_t *posYmove = lv_btn_create(testScreen);
-    lv_obj_set_size(posYmove, 60, 40);
-    lv_obj_align(posYmove, LV_ALIGN_CENTER, 0, 60);
+    lv_obj_set_size(posYmove, move_btn_w, move_btn_h);
+    lv_obj_align(posYmove, LV_ALIGN_TOP_MID, 0, 260);
     lv_obj_t *posYlabel = lv_label_create(posYmove);
-    lv_label_set_text(posYlabel, "MOVE \n+10Y");
+    lv_label_set_text(posYlabel, "+10 Y");
     lv_obj_set_style_text_color(posYlabel, lv_color_black(), 0);
+    lv_obj_center(posYlabel);
     lv_obj_add_event_cb(posYmove, yPos_event_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *negYmove = lv_btn_create(testScreen);
-    lv_obj_set_size(negYmove, 60, 40);
-    lv_obj_align(negYmove, LV_ALIGN_CENTER, 0, 110);
-    lv_obj_t *negYlabel = lv_label_create(negYmove);
-    lv_label_set_text(negYlabel, "MOVE \n-10Y");
-    lv_obj_set_style_text_color(negYlabel, lv_color_black(), 0);
-    lv_obj_add_event_cb(negYmove, yNeg_event_cb, LV_EVENT_CLICKED, NULL);
-
     lv_obj_t *posZmove = lv_btn_create(testScreen);
-    lv_obj_set_size(posZmove, 60, 40);
-    lv_obj_align(posZmove, LV_ALIGN_CENTER, 70, 60);
+    lv_obj_set_size(posZmove, move_btn_w, move_btn_h);
+    lv_obj_align(posZmove, LV_ALIGN_TOP_MID, gap_x, 260);
     lv_obj_t *posZlabel = lv_label_create(posZmove);
-    lv_label_set_text(posZlabel, "MOVE \n+10Z");
+    lv_label_set_text(posZlabel, "+10 Z");
     lv_obj_set_style_text_color(posZlabel, lv_color_black(), 0);
+    lv_obj_center(posZlabel);
     lv_obj_add_event_cb(posZmove, zPos_event_cb, LV_EVENT_CLICKED, NULL);
 
+    // --- NEGATIVE MOVES (Bottom Row) ---
+    lv_obj_t *negXmove = lv_btn_create(testScreen);
+    lv_obj_set_size(negXmove, move_btn_w, move_btn_h);
+    lv_obj_align(negXmove, LV_ALIGN_TOP_MID, -gap_x, 335); // 260 + 60 (height) + 15 (gap)
+    lv_obj_t *negXlabel = lv_label_create(negXmove);
+    lv_label_set_text(negXlabel, "-10 X");
+    lv_obj_set_style_text_color(negXlabel, lv_color_black(), 0);
+    lv_obj_center(negXlabel);
+    lv_obj_add_event_cb(negXmove, xNeg_event_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *negYmove = lv_btn_create(testScreen);
+    lv_obj_set_size(negYmove, move_btn_w, move_btn_h);
+    lv_obj_align(negYmove, LV_ALIGN_TOP_MID, 0, 335);
+    lv_obj_t *negYlabel = lv_label_create(negYmove);
+    lv_label_set_text(negYlabel, "-10 Y");
+    lv_obj_set_style_text_color(negYlabel, lv_color_black(), 0);
+    lv_obj_center(negYlabel);
+    lv_obj_add_event_cb(negYmove, yNeg_event_cb, LV_EVENT_CLICKED, NULL);
+
     lv_obj_t *negZmove = lv_btn_create(testScreen);
-    lv_obj_set_size(negZmove, 60, 40);
-    lv_obj_align(negZmove, LV_ALIGN_CENTER, 70, 110);
+    lv_obj_set_size(negZmove, move_btn_w, move_btn_h);
+    lv_obj_align(negZmove, LV_ALIGN_TOP_MID, gap_x, 335);
     lv_obj_t *negZlabel = lv_label_create(negZmove);
-    lv_label_set_text(negZlabel, "MOVE \n-10Z");
+    lv_label_set_text(negZlabel, "-10 Z");
     lv_obj_set_style_text_color(negZlabel, lv_color_black(), 0);
+    lv_obj_center(negZlabel);
     lv_obj_add_event_cb(negZmove, zNeg_event_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *headID = lv_label_create(testScreen);
-    // Head ID
-    lv_obj_set_width(headID, LCD_H_RES - 20);
-    lv_obj_set_style_text_align(headID, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(headID, lv_color_black(), 0);
-    lv_label_set_text_fmt(headID, "Current Head ID: %d", readHeadState());
-    lv_obj_align(headID, LV_ALIGN_TOP_MID, 0, 10);
-
-    lvgl_port_unlock();
-}
-
-// Make the label pointer global or accessible to your GPIO polling/interrupt logic
-lv_obj_t *headID;
-int ID = 0;
-
-void create_my_screen(void)
-{
-    headID = lv_label_create(testScreen);
-    lv_obj_set_width(headID, LCD_H_RES - 20);
-    lv_obj_set_style_text_align(headID, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(headID, lv_color_black(), 0);
-    lv_obj_align(headID, LV_ALIGN_TOP_MID, 0, 10);
-
-    // USE THIS for formatted strings!
-    lv_label_set_text_fmt(headID, "Current Head ID: %d", ID);
+    lvgl_port_unlock(); 
 }
 
 ///////////////////////////////////////////////////////////////////////////

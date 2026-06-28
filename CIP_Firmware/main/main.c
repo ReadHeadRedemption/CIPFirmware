@@ -21,8 +21,8 @@ Limit Switch Interrupts -- Homeing function
 
 */
 
-char *tempFile = "main\\sample.gcode";
-char *spiffs_file = "/spiffs/sample.gcode";
+// char *tempFile = "main\\sample.gcode";
+// char *spiffs_file = "/spiffs/sample.gcode";
 
 TaskHandle_t parserHandle = NULL;
 
@@ -283,20 +283,20 @@ void app_main(void)
     esp_console_new_repl_uart(&uart_config, &repl_config, &repl);
 
     // Initialize SPIFFS for file storage (for testing G-code parsing)
-    esp_vfs_spiffs_conf_t conf = {
-        .base_path = "/spiffs",
-        .partition_label = "spiffs",
-        .max_files = 5,
-        .format_if_mount_failed = true,
-    };
+    // esp_vfs_spiffs_conf_t conf = {
+    //     .base_path = "/spiffs",
+    //     .partition_label = "spiffs",
+    //     .max_files = 5,
+    //     .format_if_mount_failed = true,
+    // };
 
-    esp_err_t ret = esp_vfs_spiffs_register(&conf);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to mount SPIFFS");
-        return;
-    }
-    ESP_LOGI(TAG, "SPIFFS mounted successfully");
+    // esp_err_t ret = esp_vfs_spiffs_register(&conf);
+    // if (ret != ESP_OK)
+    // {
+    //     ESP_LOGE(TAG, "Failed to mount SPIFFS");
+    //     return;
+    // }
+    // ESP_LOGI(TAG, "SPIFFS mounted successfully");
 
     vTaskDelay(pdMS_TO_TICKS(100));
     if (init_io_expander() != ESP_OK)
@@ -398,7 +398,6 @@ void app_main(void)
     // xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
     // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
-    //xTaskCreate(readSD, "testing SD Card", 4096, NULL, 1, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     //  Create heater control task
     //   xTaskCreate(HeaterControl, "HeaterControl", 2048, NULL, 1, NULL);

@@ -10,11 +10,13 @@ static const char *TAG = "GCODE_PARSER";
 uint32_t feed = 0;
 
 float scale = 1.0f;
-float eScale = 0.00005f;
+float eScale = 0.0001f;
 float extrude = 0.0f;
 float total_extruded = 0.0f;
 
 bool distMode = true;
+
+
 
 // Temp file location to load into the esp32
 void readParseFile(char *fileLocation)

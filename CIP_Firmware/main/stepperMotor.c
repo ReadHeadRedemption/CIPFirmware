@@ -166,12 +166,12 @@
 
 //     return rmt_transmit(motor_channels[motor_id], motor_encoders[motor_id], &symbol, 1, &tx_config);
 // }
-float K_FACTOR = 0.01f;
+float K_FACTOR = 0.025f;
 
 esp_err_t changeTool(int tool)
 {
-    // Condutive Ink, Insulator Ink, Camera
-    float toolKval[] = {0.01f, 0.02f, 0.0f};
+    // Condutive Ink, Solder Paste Ink, Camera
+    float toolKval[3] = {0.02f, 0.01f, 0.0f};
     K_FACTOR = toolKval[tool];
     return ESP_OK;
 }
@@ -1371,7 +1371,7 @@ esp_err_t homeMotors()
     coordinated_move(&homer);
 
     // Prepare for homing moves
-    homer.feed_rate_hz = 10000;
+    homer.feed_rate_hz = 5000;
 
     // ----------------------------------------------------------------
     // HOME X AXIS

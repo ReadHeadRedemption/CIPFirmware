@@ -6,14 +6,18 @@
 #include "pins.h"
 
 
-#define MicroStepping 32.0f
+#define xMicroStepping 32.0f
+#define yMicroStepping 32.0f
+#define zMicroStepping 8.0f
+#define eMicroStepping 32.0f
+
 #define MotorStepsPerRev (360.0f / 1.8f)
 
 // Calculate steps per mm as compile-time constants
-#define xStepsPerMM  ((MotorStepsPerRev * MicroStepping) / (20.0f * 2.0f))   // 20 tooth gear w/ 2mm belt pitch
-#define yStepsPerMM  ((MotorStepsPerRev * MicroStepping) / (20.0f * 2.0f))
-#define zStepsPerMM  ((MotorStepsPerRev * MicroStepping) / 8.0f)             // 8mm shift per revolution
-#define eStepsPerMM  ((MotorStepsPerRev * MicroStepping) / 1.0f)
+#define xStepsPerMM  ((MotorStepsPerRev * zMicroStepping) / (20.0f * 2.0f))   // 20 tooth gear w/ 2mm belt pitch
+#define yStepsPerMM  ((MotorStepsPerRev * yMicroStepping) / (20.0f * 2.0f))
+#define zStepsPerMM  ((MotorStepsPerRev * zMicroStepping) / 8.0f)             // 8mm shift per revolution
+#define eStepsPerMM  ((MotorStepsPerRev * eMicroStepping) / 1.0f)
 
 // Motor identifiers
 typedef enum {

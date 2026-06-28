@@ -6,4 +6,4 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(CIP_Firmware)
 
 # SPIFFS configuration
-spiffs_create_partition_image(spiffs spiffs_image FLASH_IN_PROJECT)
+# spiffs_create_partition_image(spiffs spiffs_image FLASH_IN_PROJECT)
