@@ -9,6 +9,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <max31865.h>
 
 // #define SSR_PIN             GPIO_NUM_4   // placeholder — swap to real pin
 

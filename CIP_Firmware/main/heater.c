@@ -27,54 +27,67 @@ static const char *TAG = "HEATER";
 static spi_device_handle_t max31865_spi;
 
 // ── SPI helpers ───────────────────────────────────────────────
-static esp_err_t max31865_write_reg(uint8_t reg, uint8_t value)
-{
-    lvgl_port_lock(0);
-    spi_transaction_t t = {
-        .length    = 16,
-        .tx_buffer = (uint8_t[]){ reg | 0x80, value },
-    };
-    lvgl_port_unlock();
-    return spi_device_transmit(max31865_spi, &t);
-}
+// static esp_err_t max31865_write_reg(uint8_t reg, uint8_t value)
+// {
+//     lvgl_port_lock(0);
+//     spi_transaction_t t = {
+//         .length    = 16,
+//         .tx_buffer = (uint8_t[]){ reg | 0x80, value },
+//     };
+//     lvgl_port_unlock();
+//     return spi_device_transmit(max31865_spi, &t);
+// }
 
-static esp_err_t max31865_read_reg(uint8_t reg, uint8_t *out, size_t len)
-{
-    lvgl_port_lock(0);
-    uint8_t tx[len + 1];
-    uint8_t rx[len + 1];
-    memset(tx, 0, sizeof(tx));
-    tx[0] = reg & 0x7F;  // read — MSB clear
+// static esp_err_t max31865_read_reg(uint8_t reg, uint8_t *out, size_t len)
+// {
+//     lvgl_port_lock(0);
+//     uint8_t tx[len + 1];
+//     uint8_t rx[len + 1];
+//     memset(tx, 0, sizeof(tx));
+//     tx[0] = reg & 0x7F;  // read — MSB clear
 
-    spi_transaction_t t = {
-        .length    = (len + 1) * 8,
-        .tx_buffer = tx,
-        .rx_buffer = rx,
-    };
-    esp_err_t err = spi_device_transmit(max31865_spi, &t);
-    if (err == ESP_OK)
-        memcpy(out, &rx[1], len);
-    lvgl_port_unlock();
-    return err;
-}
+//     spi_transaction_t t = {
+//         .length    = (len + 1) * 8,
+//         .tx_buffer = tx,
+//         .rx_buffer = rx,
+//     };
+//     esp_err_t err = spi_device_transmit(max31865_spi, &t);
+//     if (err == ESP_OK)
+//         memcpy(out, &rx[1], len);
+//     lvgl_port_unlock();
+//     return err;
+// }
 
 // ── Temperature reading ───────────────────────────────────────
-static float max31865_read_temperature(void)
-{
-    uint8_t buf[2];
-    if (max31865_read_reg(MAX31865_RTD_MSB_REG, buf, 2) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "SPI read failed");
-        return -999.0f;
-    }
+// static float max31865_read_temperature(void)
+// {
+//     uint8_t buf[2];
+//     if (max31865_read_reg(MAX31865_RTD_MSB_REG, buf, 2) != ESP_OK)
+//     {
+//         ESP_LOGE(TAG, "SPI read failed");
+//         return -999.0f;
+//     }
 
-    uint16_t rtd_raw = ((uint16_t)buf[0] << 8 | buf[1]) >> 1;  // strip fault bit
-    float resistance = ((float)rtd_raw / 32768.0f) * PT100_REF_RESISTANCE;
+//     uint16_t rtd_raw = ((uint16_t)buf[0] << 8 | buf[1]) >> 1;  // strip fault bit
+//     float resistance = ((float)rtd_raw / 32768.0f) * PT100_REF_RESISTANCE;
 
-    // Linear approximation: T = (R - R0) / (R0 * alpha)
-    float temperature = (resistance - PT100_NOMINAL) / (PT100_NOMINAL * PT100_ALPHA);
-    return temperature;
-}
+//     // Linear approximation: T = (R - R0) / (R0 * alpha)
+//     float temperature = (resistance - PT100_NOMINAL) / (PT100_NOMINAL * PT100_ALPHA);
+//     return temperature;
+// }
+
+static max31865_config_t max31865_cfg = {
+    .v_bias = true,
+    .filter = MAX31865_FILTER_60HZ,
+    .mode = MAX31865_MODE_SINGLE,
+    .connection = MAX31865_3WIRE
+};
+
+max31865_t max31865_dev = {
+        .standard = MAX31865_US_INDUSTRIAL,
+        .r_ref = 430,
+        .rtd_nominal = 100,
+    };;
 
 // ── Init ──────────────────────────────────────────────────────
 esp_err_t heater_init(void)
@@ -101,19 +114,26 @@ esp_err_t heater_init(void)
     // ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &bus_cfg, SPI_DMA_CH_AUTO));
 
     // MAX31865 device
-    spi_device_interface_config_t dev_cfg = {
-        .clock_speed_hz = 1000000,    // 1 MHz — MAX31865 max is 5 MHz
-        .mode           = 1,          // CPOL=0, CPHA=1
-        .spics_io_num   = MAX31865_CS_PIN,
-        .queue_size     = 1,
-    };
-    ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &dev_cfg, &max31865_spi));
+    // spi_device_interface_config_t dev_cfg = {
+    //     .clock_speed_hz = 1000000,    // 1 MHz — MAX31865 max is 5 MHz
+    //     .mode           = 1,          // CPOL=0, CPHA=1
+    //     .spics_io_num   = MAX31865_CS_PIN,
+    //     .queue_size     = 1,
+    // };
+    // ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &dev_cfg, &max31865_spi));
 
-    // Configure MAX31865: V_BIAS on, auto conversion, 2/4-wire, 60Hz filter
-    uint8_t config = MAX31865_CONFIG_VBIAS_ON |
-                     MAX31865_CONFIG_CONVMODE |
-                     MAX31865_CONFIG_60HZ;
-    ESP_ERROR_CHECK(max31865_write_reg(MAX31865_CONFIG_REG, config));
+    // // Configure MAX31865: V_BIAS on, auto conversion, 2/4-wire, 60Hz filter
+    // uint8_t config = MAX31865_CONFIG_VBIAS_ON |
+    //                  MAX31865_CONFIG_CONVMODE |
+    //                  MAX31865_CONFIG_60HZ |
+    //                  MAX31865_CONFIG_3WIRE;
+    // ESP_ERROR_CHECK(max31865_write_reg(MAX31865_CONFIG_REG, config));
+
+    // Initialize device
+    ESP_ERROR_CHECK(max31865_init_desc(&max31865_dev, SPI3_HOST, MAX31865_MAX_CLOCK_SPEED_HZ, RTDCS));
+
+    // Configure device
+    ESP_ERROR_CHECK(max31865_set_config(&max31865_dev, &max31865_cfg));
 
     ESP_LOGI(TAG, "MAX31865 initialized");
     return ESP_OK;
@@ -125,9 +145,12 @@ void HeaterControl()
     float target_temp = 180;
     ESP_LOGI(TAG, "Heater task started — target: %.1f°C", target_temp);
 
+    float current_temp;
     while (1)
     {
-        float current_temp = max31865_read_temperature();
+        max31865_measure(&max31865_dev, &current_temp);
+
+        // max31865_clear_fault_status(&max31865_dev);
 
         printf("CURRENT TEMPERATURE: %f\n", current_temp);
 

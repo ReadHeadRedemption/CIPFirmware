@@ -404,7 +404,7 @@ void app_main(void)
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     //  Create heater control task
-    // xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
+    xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
     //   Create G-code parser task
     xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, &parserHandle);
     // xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
