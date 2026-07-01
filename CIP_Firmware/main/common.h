@@ -41,6 +41,9 @@ typedef struct {
 extern MoveCmd_t head;
 
 extern QueueHandle_t uart_queue;
+extern QueueHandle_t     FileName;
+extern QueueHandle_t temperature_queue;
+
 extern uart_event_t event;
 
 // Semaphores
@@ -50,11 +53,13 @@ extern SemaphoreHandle_t zSwitchSemaphore;
 extern SemaphoreHandle_t eSwitchSemaphore;
 extern SemaphoreHandle_t StartButtonSemaphore;
 extern SemaphoreHandle_t TestButtonSemaphore;
-extern QueueHandle_t     FileName;
-extern SemaphoreHandle_t parseSemaphore; 
+extern SemaphoreHandle_t parseSemaphore;
+extern SemaphoreHandle_t tempReachedSemaphore; 
+
 extern SemaphoreHandle_t SDCardMutex;
-extern SemaphoreHandle_t allowMove;
 extern SemaphoreHandle_t i2c_mutex;
+
+extern SemaphoreHandle_t allowMove;
 extern SemaphoreHandle_t nohead;
 
 extern esp_io_expander_handle_t io_expander;

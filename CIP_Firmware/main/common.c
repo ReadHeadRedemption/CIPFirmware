@@ -1,6 +1,9 @@
 #include "common.h"
 
 QueueHandle_t uart_queue;
+QueueHandle_t FileName = NULL;
+QueueHandle_t temperature_queue;
+
 uart_event_t event;
 
 SemaphoreHandle_t xSwitchSemaphore = NULL;
@@ -9,10 +12,12 @@ SemaphoreHandle_t zSwitchSemaphore = NULL;
 SemaphoreHandle_t eSwitchSemaphore = NULL;
 SemaphoreHandle_t StartButtonSemaphore = NULL;
 SemaphoreHandle_t TestButtonSemaphore = NULL;
-QueueHandle_t FileName = NULL;
 SemaphoreHandle_t parseSemaphore = NULL;
+SemaphoreHandle_t tempReachedSemaphore = NULL;
+
 SemaphoreHandle_t SDCardMutex = NULL;
 SemaphoreHandle_t i2c_mutex = NULL;
+
 SemaphoreHandle_t allowMove = NULL;
 SemaphoreHandle_t nohead = NULL;
 

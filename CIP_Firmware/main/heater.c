@@ -142,40 +142,99 @@ esp_err_t heater_init(void)
 // ── HeaterControl Task ────────────────────────────────────────
 void HeaterControl()
 {
-    float target_temp = 180;
+    float target_temp = 0;
     ESP_LOGI(TAG, "Heater task started — target: %.1f°C", target_temp);
 
     float current_temp;
+
+    BaseType_t skip_for_new_temp = pdFALSE;
+    BaseType_t new_temp_unreached = pdFALSE;
     while (1)
     {
-        max31865_measure(&max31865_dev, &current_temp);
+        while (target_temp == 0)
+        {
+            new_temp_unreached = xQueueReceive(temperature_queue, &target_temp, 500);            
+        }
+
+        esp_err_t res = max31865_measure(&max31865_dev, &current_temp);
 
         // max31865_clear_fault_status(&max31865_dev);
 
         printf("CURRENT TEMPERATURE: %f\n", current_temp);
 
-        if (current_temp < -900.0f)
+                // Two checks: check if there is any result, and if so, a sanity check for temperature. Below 18 C is not sane
+        if (res != ESP_OK || current_temp < 18)
         {
-            // Sensor fault — shut off heater for safety
-            // gpio_set_level(SSR_PIN, 0);
-            ESP_LOGE(TAG, "Sensor fault — heater disabled");
+            ESP_LOGE(TAG, "Failed to measure: %d (%s)", res, esp_err_to_name(res));
+            if (SSRE != GPIO_NUM_NC) gpio_set_level(SSRE, 0);
+            vTaskDelete(NULL);
         }
         else
         {
-            // Bang-bang with hysteresis
-            if (current_temp < (target_temp - HEATER_HYSTERESIS))
-            {
-                // gpio_set_level(SSR_PIN, 1);  // heat on
-                ESP_LOGD(TAG, "Heater ON  — %.2f°C / %.1f°C", current_temp, target_temp);
-            }
-            else if (current_temp >= (target_temp + HEATER_HYSTERESIS))
-            {
-                // gpio_set_level(SSR_PIN, 0);  // heat off
-                ESP_LOGD(TAG, "Heater OFF — %.2f°C / %.1f°C", current_temp, target_temp);
-            }
-            // within hysteresis band — hold current SSR state
-        }
+            ESP_LOGI(TAG, "Temperature: %.4f C (%.4f F)", current_temp, current_temp * 1.8 + 32);
 
-        vTaskDelay(pdMS_TO_TICKS(100));  // 10 Hz control loop
+            // If the temperature is less than the desired, heat up to the desired temperature
+            if (current_temp < target_temp)
+            {
+                // Turn on SSR to conduct power through heater
+                if (SSRE != GPIO_NUM_NC) 
+                    gpio_set_level(SSRE, 1);
+                
+                // Generally, the hot plate heats up at 1 degree C per second when on, so wait a number of seconds equal to the difference in set and real temperatures
+                int onTime = (int)(1000 * (target_temp - current_temp));
+
+                // If this time is greater than 50 ms, wait for this time
+                if (onTime > 50)
+                {
+                    new_temp_unreached = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(onTime));
+                    skip_for_new_temp = new_temp_unreached;
+                }
+                    
+                // If this time is too short (the temperature is already very close to the set temperature), clamp waiting at 50 ms to not strain the SSR
+                // CONSIDER REMOVING THIS AND TO NOT HEAT AT ALL; NEEDS TESTING; WORKS ANYWAY
+                else
+                {
+                    new_temp_unreached = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(50));
+                    skip_for_new_temp = new_temp_unreached;
+                }
+
+                // Turn off SSR
+                if (SSRE != GPIO_NUM_NC) 
+                    gpio_set_level(SSRE, 0);
+
+                if (skip_for_new_temp == pdTRUE)
+                {
+                    skip_for_new_temp = pdFALSE;
+                    continue;
+                }
+            }
+            
+            else if (new_temp_unreached == pdTRUE)
+            {
+                xSemaphoreGive(tempReachedSemaphore);
+                new_temp_unreached = pdFALSE;
+            }
+
+            /*  
+                If heating, both the hot plate and RTD need time to fully absorb the heat and temperature change
+                If not heating, we should still wait a certain interval to prevent rapid switching and because temperature does not change that quickly (perhaps at -0.1 degree C/s)
+                Generally, it was observed that RTDs needed some base amount of time (we give four seconds) to pick up to changes in temperature and extra time for larger changes in temperature (we give 100 ms for each difference in degrees C)
+                However, this time decreases with increased temperature because the larger temperature increase will occur more rapidly
+            */
+            // CHANGE COMMENT ABOVE TO REFLECT CHANGES
+            int waitTime = 30000 - 10 * (target_temp - current_temp);
+
+            // If the wait time is less than 4 seconds (real temperature is greater than set temperature), clamp at four seconds
+            if (waitTime < 20000)
+            {
+                new_temp_unreached = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(20000));
+            }
+            
+            // Otherwise, wait the calculated time
+            else
+            {
+                new_temp_unreached = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(waitTime));
+            }
+        }
     }
 }
