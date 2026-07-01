@@ -369,15 +369,18 @@ void parse(char *line)
         else if (strcmp(cmd, "M190") == 0)
         {
             float set_temp;
-            ESP_LOGI(TAG, "WAIT FOR BED TO REACH %f DEGREES", set_temp);
             // How to parse: "M190 S170" is an example where 170 is temperatyure in C
             if ((p = strchr(line, 'S')) != NULL)
             {
                 sscanf(p + 1, "%f", &set_temp);
             }
+                
+            ESP_LOGI(TAG, "WAIT FOR BED TO REACH %f DEGREES", set_temp);
             xQueueSend(temperature_queue, &set_temp, 1);
-            
+                
             xSemaphoreTake(tempReachedSemaphore, portMAX_DELAY); 
+
+            printf("Tempature Reached\n");
         }
     }
     else if (cmd[0] == 'T') // tool change commands

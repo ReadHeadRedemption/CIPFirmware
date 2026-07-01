@@ -151,10 +151,6 @@ void HeaterControl()
     BaseType_t new_temp_unreached = pdFALSE;
     while (1)
     {
-        while (target_temp == 0)
-        {
-            new_temp_unreached = xQueueReceive(temperature_queue, &target_temp, 500);            
-        }
 
         esp_err_t res = max31865_measure(&max31865_dev, &current_temp);
 
@@ -163,7 +159,7 @@ void HeaterControl()
         printf("CURRENT TEMPERATURE: %f\n", current_temp);
 
                 // Two checks: check if there is any result, and if so, a sanity check for temperature. Below 18 C is not sane
-        if (res != ESP_OK || current_temp < 18)
+        if (res != ESP_OK || current_temp < 10)
         {
             ESP_LOGE(TAG, "Failed to measure: %d (%s)", res, esp_err_to_name(res));
             if (SSRE != GPIO_NUM_NC) gpio_set_level(SSRE, 0);
@@ -186,54 +182,65 @@ void HeaterControl()
                 // If this time is greater than 50 ms, wait for this time
                 if (onTime > 50)
                 {
-                    new_temp_unreached = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(onTime));
-                    skip_for_new_temp = new_temp_unreached;
+                    skip_for_new_temp = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(onTime));
                 }
                     
                 // If this time is too short (the temperature is already very close to the set temperature), clamp waiting at 50 ms to not strain the SSR
                 // CONSIDER REMOVING THIS AND TO NOT HEAT AT ALL; NEEDS TESTING; WORKS ANYWAY
                 else
                 {
-                    new_temp_unreached = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(50));
-                    skip_for_new_temp = new_temp_unreached;
+                    skip_for_new_temp = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(50));
                 }
 
                 // Turn off SSR
                 if (SSRE != GPIO_NUM_NC) 
                     gpio_set_level(SSRE, 0);
+            }
 
-                if (skip_for_new_temp == pdTRUE)
+
+            if (skip_for_new_temp == pdFALSE)
+            {  
+                 /*  
+                    If heating, both the hot plate and RTD need time to fully absorb the heat and temperature change
+                    If not heating, we should still wait a certain interval to prevent rapid switching and because temperature does not change that quickly (perhaps at -0.1 degree C/s)
+                    Generally, it was observed that RTDs needed some base amount of time (we give four seconds) to pick up to changes in temperature and extra time for larger changes in temperature (we give 100 ms for each difference in degrees C)
+                    However, this time decreases with increased temperature because the larger temperature increase will occur more rapidly
+                */
+                // CHANGE COMMENT ABOVE TO REFLECT CHANGES
+                int waitTime = 30000 - 10 * (target_temp - current_temp);
+
+                // If the wait time is less than 4 seconds (real temperature is greater than set temperature), clamp at four seconds
+                if (waitTime < 20000)
                 {
-                    skip_for_new_temp = pdFALSE;
-                    continue;
+                    skip_for_new_temp = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(20000));
+                }
+                
+                // Otherwise, wait the calculated time
+                else
+                {
+                    skip_for_new_temp = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(waitTime));
                 }
             }
-            
-            else if (new_temp_unreached == pdTRUE)
+
+            if (new_temp_unreached == pdTRUE)
             {
+                printf("GIVING SEMAPHORE\n");
                 xSemaphoreGive(tempReachedSemaphore);
                 new_temp_unreached = pdFALSE;
             }
 
-            /*  
-                If heating, both the hot plate and RTD need time to fully absorb the heat and temperature change
-                If not heating, we should still wait a certain interval to prevent rapid switching and because temperature does not change that quickly (perhaps at -0.1 degree C/s)
-                Generally, it was observed that RTDs needed some base amount of time (we give four seconds) to pick up to changes in temperature and extra time for larger changes in temperature (we give 100 ms for each difference in degrees C)
-                However, this time decreases with increased temperature because the larger temperature increase will occur more rapidly
-            */
-            // CHANGE COMMENT ABOVE TO REFLECT CHANGES
-            int waitTime = 30000 - 10 * (target_temp - current_temp);
-
-            // If the wait time is less than 4 seconds (real temperature is greater than set temperature), clamp at four seconds
-            if (waitTime < 20000)
+            if (skip_for_new_temp == pdTRUE)
             {
-                new_temp_unreached = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(20000));
-            }
-            
-            // Otherwise, wait the calculated time
-            else
-            {
-                new_temp_unreached = xQueueReceive(temperature_queue, &target_temp, pdMS_TO_TICKS(waitTime));
+                if (current_temp > target_temp)
+                {
+                    printf("GIVING SEMAPHORE\n");
+                    xSemaphoreGive(tempReachedSemaphore);
+                }
+                else
+                {
+                    new_temp_unreached = pdTRUE;
+                }
+                skip_for_new_temp = pdFALSE;
             }
         }
     }
