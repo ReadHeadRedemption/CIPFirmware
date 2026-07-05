@@ -378,19 +378,21 @@ void parse(char *line)
                 // Just set bed temp and keep going
             }
         }
-        else if (strcmp(cmd, "190") == 0)
+        else if (strcmp(cmd, "M190") == 0)
         {
-            int temp = -1;
+            float set_temp;
+            // How to parse: "M190 S170" is an example where 170 is temperatyure in C
             if ((p = strchr(line, 'S')) != NULL)
             {
-                ESP_LOGI(TAG, "BED TEMP BLOCKING ");
-                sscanf(p + 1, "%d", &temp);
-                // Set bed temp and keep checking until its what is desired
-                // while (temp !=) // Read in temp from MAX
-                // {
-                //     vTaskDelay(pdMS_TO_TICKS(3000)) // 3 second wait
-                // }
+                sscanf(p + 1, "%f", &set_temp);
             }
+                
+            ESP_LOGI(TAG, "WAIT FOR BED TO REACH %f DEGREES", set_temp);
+            xQueueSend(temperature_queue, &set_temp, 1);
+                
+            xSemaphoreTake(tempReachedSemaphore, portMAX_DELAY); 
+
+            printf("Tempature Reached\n");
         }
     }
     else if (cmd[0] == 'T') // tool change commands

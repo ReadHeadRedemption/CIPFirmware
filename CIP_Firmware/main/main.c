@@ -307,12 +307,16 @@ void app_main(void)
     allowMove = xSemaphoreCreateBinary();
     nohead = xSemaphoreCreateBinary();
 
+    // Creating semaphore for waiting for temperature to be reached
+    tempReachedSemaphore = xSemaphoreCreateBinary();
+
     // Mutexes
     SDCardMutex = xSemaphoreCreateMutex();
     i2c_mutex = xSemaphoreCreateMutex();
 
     // Queues
     FileName = xQueueCreate(1, (sizeof(char) * 128));
+    temperature_queue = xQueueCreate(1, sizeof(float));
 
     ///////////////////////////////////////////////////////////////////////////////
     //

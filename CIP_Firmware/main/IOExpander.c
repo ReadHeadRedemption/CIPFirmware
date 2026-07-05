@@ -40,6 +40,9 @@ esp_err_t init_io_expander()
     {
         gpio_set_direction(OUTPUTPINS[i], GPIO_MODE_OUTPUT);
     }
+
+    gpio_set_level(SSRE, 0);
+    
     int INPUTPINS[6] = {xSwitch, ySwitch, zSwitch, eSwitch, HEAD_ID_0, HEAD_ID_1};
     for (int i = 0; i < 6; i++)
     {
