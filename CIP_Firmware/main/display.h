@@ -10,6 +10,7 @@
 #include "driver/spi_master.h"
 
 #include "stepperMotor.h"
+#include "GCodeParser.h"
 
 extern MoveCmd_t head;
 

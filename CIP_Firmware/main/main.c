@@ -24,8 +24,6 @@ Limit Switch Interrupts -- Homeing function
 // char *tempFile = "main\\sample.gcode";
 // char *spiffs_file = "/spiffs/sample.gcode";
 
-TaskHandle_t parserHandle = NULL;
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 //                          TASKS
@@ -110,7 +108,7 @@ static void checkSwitches(void *pvParameters)
         if (levels[3] == 1)
         {
             xSemaphoreGive(eSwitchSemaphore);
-            //printf("E switch triggered\n");
+            // printf("E switch triggered\n");
         }
         vTaskDelay(pdMS_TO_TICKS(19));
     }
@@ -158,6 +156,11 @@ static void console_task(void *arg)
             int state = readHeadState();
             printf("TOOL HEAD: %d", state);
         }
+        else if (strcmp(line, "where") == 0)
+        {
+            position();
+            printf("\n");
+        }
         else
         {
             parse(line);
@@ -166,6 +169,16 @@ static void console_task(void *arg)
         linenoiseHistoryAdd(line);
         // Free buffer
         linenoiseFree(line);
+    }
+}
+
+static void blinker(void *pvParameters)
+{
+    int level = 0;
+    while (1)
+    {
+        gpio_set_level(LED1, !level);
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 
@@ -205,48 +218,6 @@ void moveMotor(void *pvParameters)
     }
 }
 
-void testYaxis(void *pvParameters)
-{
-    homeMotors();
-    MoveCmd_t moveTo;
-    moveTo.feed_rate_hz = 1000.0f;
-    moveTo.target_z = 5.0f;
-    moveTo.target_x = 100.0f;
-    moveTo.target_y = 0.0f;
-    coordinated_move(&moveTo);
-    moveTo.feed_rate_hz = 1000.0f;
-    while (1)
-    {
-        moveTo.target_y -= .1;
-        coordinated_move(&moveTo);
-    }
-}
-
-void buttonTest(void *pvParameters)
-{
-    bool xstateFlag = false;
-    bool ystateFlag = false;
-    bool zstateFlag = false;
-    while (1)
-    {
-        if ((xSemaphoreTake(xSwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) && xstateFlag != true)
-        {
-            ESP_LOGI(TAG, "X Switch Pressed");
-            xstateFlag = true;
-        }
-        if ((xSemaphoreTake(ySwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) && ystateFlag != true)
-        {
-            ESP_LOGI(TAG, "Y Switch Pressed");
-            ystateFlag = true;
-        }
-        if ((xSemaphoreTake(zSwitchSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) && zstateFlag != true)
-        {
-            ESP_LOGI(TAG, "Z Switch Pressed");
-            zstateFlag = true;
-        }
-    }
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 //                          APP MAIN
@@ -260,6 +231,7 @@ void app_main(void)
     gpio_set_direction(yStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(zStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(eStep, GPIO_MODE_OUTPUT);
+    gpio_set_direction(LED1, GPIO_MODE_OUTPUT);
 
     // gpio_config_t outputPins = {
     //     .pin_bit_mask = (1ULL << xStep) | (1ULL << yStep) |
@@ -320,7 +292,7 @@ void app_main(void)
     if (initializeSD() != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to initialize SD card!");
-        return;
+        // return;
     }
 
     // Creating button semaphores
@@ -372,14 +344,14 @@ void app_main(void)
         .source_clk = UART_SCLK_APB,
     };
     uart_param_config(UART_NUM_1, &uart_config2);
-    
+
     // Set UART pins (using -1 for pins you don't want to change)
     uart_set_pin(UART_NUM_1, PI_TX, PI_RX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    
+
     // Configure UART parameters
     const int uart_buffer_size = (1024 * 2);
     uart_driver_install(UART_NUM_1, uart_buffer_size, uart_buffer_size, 10, &uart_queue, 0);
- 
+
     ESP_LOGI(TAG, "GPIO pins configured successfully");
 
     // ESP_ERROR_CHECK(gpio_config(&outputPins));
@@ -394,7 +366,7 @@ void app_main(void)
     // xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 3, NULL, 1);
 
     display_init();
-    
+
     heater_init();
 
     // Test Tasks
@@ -404,9 +376,10 @@ void app_main(void)
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     //  Create heater control task
-    xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
+    // xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
     //   Create G-code parser task
     xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, &parserHandle);
-    // xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
-    // ESP_LOGI(TAG, "All tasks created successfully");
+    xTaskCreate(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL);
+    xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
+    ESP_LOGI(TAG, "All tasks created successfully");
 }

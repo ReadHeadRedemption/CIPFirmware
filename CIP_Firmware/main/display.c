@@ -35,6 +35,122 @@ static void home_screen_cb(lv_event_t *e)
 
 ///////////////////////////////////////////////////////////////////////////
 //
+//                          FACTIVE PRINT SCREEN
+//
+///////////////////////////////////////////////////////////////////////////
+
+// Global references for the active print screen to prevent memory leaks
+lv_obj_t *activePrintScreen = NULL;
+lv_obj_t *print_status_label = NULL;
+lv_obj_t *tool_head_label = NULL;
+lv_obj_t *layer_info_label = NULL;
+
+// Callback for the STOP button
+static void stop_print_cb(lv_event_t *e)
+{
+    if (!lvgl_port_lock(0))
+        return;
+
+    vTaskSuspend(parserHandle);
+    MoveCmd_t head;
+    head.moveE = -200.0f;
+    coordinated_move(&head);
+    if (print_status_label)
+    {
+        lv_label_set_text(print_status_label, "Print STOPPED");
+    }
+    ESP_LOGI(TAG, "Print Stopped by User");
+
+    lvgl_port_unlock();
+}
+
+void show_active_print_screen(const char *filename)
+{
+    if (!lvgl_port_lock(0))
+        return;
+
+    // ====================================================
+    // MEMORY MANAGEMENT: Clean old screen if it exists
+    // ====================================================
+    if (activePrintScreen == NULL)
+    {
+        activePrintScreen = lv_obj_create(NULL);
+    }
+    else
+    {
+        lv_obj_clean(activePrintScreen); // Destroys all children to free memory
+    }
+
+    lv_obj_set_style_text_font(activePrintScreen, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_bg_color(activePrintScreen, lv_color_white(), 0);
+    lv_obj_set_style_text_color(activePrintScreen, lv_color_black(), 0);
+
+    // ====================================================
+    // 1. HEADER (Y: 5 to 40)
+    // ====================================================
+    lv_obj_t *header_label = lv_label_create(activePrintScreen);
+    lv_label_set_text(header_label, "Active Print");
+    lv_obj_align(header_label, LV_ALIGN_TOP_LEFT, 10, 15);
+
+    // Home / Back Button (Top Right)
+    lv_obj_t *home_btn = lv_btn_create(activePrintScreen);
+    lv_obj_set_size(home_btn, 65, 35);
+    lv_obj_align(home_btn, LV_ALIGN_TOP_RIGHT, -5, 5);
+    lv_obj_t *home_label = lv_label_create(home_btn);
+    lv_label_set_text(home_label, "BACK");
+    lv_obj_set_style_text_color(home_label, lv_color_black(), 0);
+    lv_obj_center(home_label);
+    lv_obj_add_event_cb(home_btn, home_screen_cb, LV_EVENT_CLICKED, NULL);
+
+    // ====================================================
+    // 2. CONFIRMATION & STATUS AREA (Y: 60)
+    // ====================================================
+    print_status_label = lv_label_create(activePrintScreen);
+    lv_obj_set_width(print_status_label, 220);
+    lv_obj_set_style_text_align(print_status_label, LV_TEXT_ALIGN_CENTER, 0);
+    // Display the filename that was successfully sent
+    lv_label_set_text_fmt(print_status_label, "Successfully Sent:\n%s", filename);
+    lv_obj_align(print_status_label, LV_ALIGN_TOP_MID, 0, 60);
+
+    // ====================================================
+    // 3. TOOL HEAD & LAYER INFO (Y: 120 to 180)
+    // ====================================================
+    tool_head_label = lv_label_create(activePrintScreen);
+    lv_obj_set_width(tool_head_label, 220);
+    lv_obj_set_style_text_align(tool_head_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(tool_head_label, "Tool Head: --"); // Placeholder
+    lv_obj_align(tool_head_label, LV_ALIGN_TOP_MID, 0, 120);
+
+    layer_info_label = lv_label_create(activePrintScreen);
+    lv_obj_set_width(layer_info_label, 220);
+    lv_obj_set_style_text_align(layer_info_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(layer_info_label, "Current Layer: 0 / --"); // Placeholder
+    lv_obj_align(layer_info_label, LV_ALIGN_TOP_MID, 0, 160);
+
+    // ====================================================
+    // 4. STOP BUTTON (Y: 230 - Anchored to bottom)
+    // ====================================================
+    lv_obj_t *stop_btn = lv_btn_create(activePrintScreen);
+    lv_obj_set_size(stop_btn, 160, 60); // Large and prominent
+    lv_obj_align(stop_btn, LV_ALIGN_BOTTOM_MID, 0, -30);
+
+    // Styling the STOP button to be Red with White text for clear UX
+    lv_obj_set_style_bg_color(stop_btn, lv_palette_main(LV_PALETTE_RED), 0);
+
+    lv_obj_t *stop_label = lv_label_create(stop_btn);
+    lv_label_set_text(stop_label, "STOP PRINT");
+    lv_obj_set_style_text_color(stop_label, lv_color_white(), 0);
+    lv_obj_center(stop_label);
+    lv_obj_add_event_cb(stop_btn, stop_print_cb, LV_EVENT_CLICKED, NULL);
+
+    // Finally, load the screen
+    lv_scr_load(activePrintScreen);
+
+    lvgl_port_unlock();
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
 //                          FILE SELECT SCREEN
 //
 ///////////////////////////////////////////////////////////////////////////
@@ -46,6 +162,7 @@ void sendToParse(char fileName[128])
         ESP_LOGI(TAG, "I AM SENDING TO THE QUEUE");
         xQueueSend(FileName, fileName, portMAX_DELAY);
         xSemaphoreGive(StartButtonSemaphore);
+        show_active_print_screen(fileName);
     }
     else
     {
@@ -273,7 +390,7 @@ void printDisplay(void)
 
 ///////////////////////////////////////////////////////////////////////////
 //
-//                          TEST SCREEN
+//                        TEST SCREEN
 //
 ///////////////////////////////////////////////////////////////////////////
 
@@ -292,13 +409,29 @@ static void tstbtn_event_cb(lv_event_t *e)
     lvgl_port_unlock();
 }
 
+static void purge_event_cb(lv_event_t *e)
+{
+    if (!lvgl_port_lock(0))
+        return;
+
+    parse("G0 Z5.5");
+    parse("G1 E40 F200");
+    for (int i = 0; i < 10; i++)
+    {
+        parse("G1 E40 F200");
+        vTaskDelay(pdMS_TO_TICKS(2500));
+    }
+    lvgl_port_unlock();
+}
+
 static void parsebtn_event_cb(lv_event_t *e)
 {
     if (!lvgl_port_lock(0))
         return;
-    //readHeadState();
-    // checkHead(e);
+    // readHeadState();
+    //  checkHead(e);
     lv_obj_t *headID = (lv_obj_t *)lv_event_get_user_data(e);
+    // Newline restored for narrow 240px width
     lv_label_set_text_fmt(headID, "Current Head ID:\n %d", readHeadState());
     printf("Checking Head ID\n");
     lvgl_port_unlock();
@@ -390,20 +523,20 @@ void test_screen(void)
     lv_obj_set_style_text_color(testScreen, lv_color_black(), 0);
 
     // ====================================================
-    // 1. HEADER AREA (Y: 10 to 50)
+    // 1. HEADER AREA (Y: 5)
     // ====================================================
-    
+
     // Status Label (Top Left)
     lv_obj_t *status_label = lv_label_create(testScreen);
     lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_color(status_label, lv_color_black(), 0);
     lv_label_set_text(status_label, "Test Screen");
-    lv_obj_align(status_label, LV_ALIGN_TOP_LEFT, 15, 20);
+    lv_obj_align(status_label, LV_ALIGN_TOP_LEFT, 5, 15);
 
     // Back Button (Top Right)
     lv_obj_t *back_btn = lv_btn_create(testScreen);
-    lv_obj_set_size(back_btn, 80, 40);
-    lv_obj_align(back_btn, LV_ALIGN_TOP_RIGHT, -15, 10); 
+    lv_obj_set_size(back_btn, 65, 35);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_RIGHT, -5, 5);
     lv_obj_t *back_label = lv_label_create(back_btn);
     lv_label_set_text(back_label, "BACK");
     lv_obj_set_style_text_color(back_label, lv_color_black(), 0);
@@ -411,25 +544,28 @@ void test_screen(void)
     lv_obj_add_event_cb(back_btn, home_screen_cb, LV_EVENT_CLICKED, NULL);
 
     // ====================================================
-    // 2. INFO AREA (Y: 60)
+    // 2. INFO AREA (Y: 45)
     // ====================================================
-    
-    // Head ID Label (Moved up to save space)
+
+    // Head ID Label
     lv_obj_t *headID = lv_label_create(testScreen);
-    lv_obj_set_width(headID, LCD_H_RES - 30);
+    lv_obj_set_width(headID, 220); // Constrained to 240px screen width
     lv_obj_set_style_text_align(headID, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(headID, lv_color_black(), 0);
     lv_label_set_text_fmt(headID, "Current Head ID:\n%d", readHeadState());
-    lv_obj_align(headID, LV_ALIGN_TOP_MID, 0, 60);
+    lv_obj_align(headID, LV_ALIGN_TOP_MID, 0, 45);
 
     // ====================================================
-    // 3. ACTION BUTTONS (Y: 120 to 235)
+    // 3. ACTION BUTTONS (Y: 90 to 185)
     // ====================================================
-    
+
+    int action_btn_w = 105; // 105 * 2 = 210 (Fits well inside 240px)
+    int action_btn_h = 45;
+
     // Check Head Button
     lv_obj_t *parse_btn = lv_btn_create(testScreen);
-    lv_obj_set_size(parse_btn, 130, 50);
-    lv_obj_align(parse_btn, LV_ALIGN_TOP_MID, -75, 120); // Moved up to 120
+    lv_obj_set_size(parse_btn, action_btn_w, action_btn_h);
+    lv_obj_align(parse_btn, LV_ALIGN_TOP_MID, -55, 90);
     lv_obj_t *parse_label = lv_label_create(parse_btn);
     lv_label_set_text(parse_label, "CHECK\nHEAD");
     lv_obj_set_style_text_align(parse_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -439,8 +575,8 @@ void test_screen(void)
 
     // Test Homing Button
     lv_obj_t *tst_btn = lv_btn_create(testScreen);
-    lv_obj_set_size(tst_btn, 130, 50);
-    lv_obj_align(tst_btn, LV_ALIGN_TOP_MID, 75, 120); // Moved up to 120
+    lv_obj_set_size(tst_btn, action_btn_w, action_btn_h);
+    lv_obj_align(tst_btn, LV_ALIGN_TOP_MID, 55, 90);
     lv_obj_t *tst_label = lv_label_create(tst_btn);
     lv_label_set_text(tst_label, "TEST\nHOMING");
     lv_obj_set_style_text_align(tst_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -448,29 +584,28 @@ void test_screen(void)
     lv_obj_center(tst_label);
     lv_obj_add_event_cb(tst_btn, tstbtn_event_cb, LV_EVENT_CLICKED, NULL);
 
-    // Purge Button 
+    // Purge Button
     lv_obj_t *purge = lv_btn_create(testScreen);
-    lv_obj_set_size(purge, 280, 50);
-    lv_obj_align(purge, LV_ALIGN_TOP_MID, 0, 185); // Tucked closely under Actions
+    lv_obj_set_size(purge, 215, action_btn_h); // 215px spans almost the full 240 width
+    lv_obj_align(purge, LV_ALIGN_TOP_MID, 0, 145);
     lv_obj_t *purgelabel = lv_label_create(purge);
     lv_label_set_text(purgelabel, "PURGE");
     lv_obj_set_style_text_color(purgelabel, lv_color_black(), 0);
     lv_obj_center(purgelabel);
-    lv_obj_add_event_cb(purge, NULL, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(purge, purge_event_cb, LV_EVENT_CLICKED, NULL);
 
     // ====================================================
-    // 4. MOVEMENT GRID (Y: 260 to 395) 
-    // Max height reached: 395px (85px of safety margin)
+    // 4. MOVEMENT GRID (Y: 200 to 300)
     // ====================================================
-    
-    int move_btn_w = 85;
-    int move_btn_h = 60; // Taller for easier tapping
-    int gap_x = 95;      // Slightly tighter horizontal spacing
+
+    int move_btn_w = 65; // 3 x 65px = 195px (+20px total for gaps = 215px wide)
+    int move_btn_h = 45;
+    int gap_x = 75; // Center is 0, Left is -75, Right is +75
 
     // --- POSITIVE MOVES (Top Row) ---
     lv_obj_t *posXmove = lv_btn_create(testScreen);
     lv_obj_set_size(posXmove, move_btn_w, move_btn_h);
-    lv_obj_align(posXmove, LV_ALIGN_TOP_MID, -gap_x, 260); // Starting at 260 instead of 300
+    lv_obj_align(posXmove, LV_ALIGN_TOP_MID, -gap_x, 200);
     lv_obj_t *posXlabel = lv_label_create(posXmove);
     lv_label_set_text(posXlabel, "+10 X");
     lv_obj_set_style_text_color(posXlabel, lv_color_black(), 0);
@@ -479,7 +614,7 @@ void test_screen(void)
 
     lv_obj_t *posYmove = lv_btn_create(testScreen);
     lv_obj_set_size(posYmove, move_btn_w, move_btn_h);
-    lv_obj_align(posYmove, LV_ALIGN_TOP_MID, 0, 260);
+    lv_obj_align(posYmove, LV_ALIGN_TOP_MID, 0, 200);
     lv_obj_t *posYlabel = lv_label_create(posYmove);
     lv_label_set_text(posYlabel, "+10 Y");
     lv_obj_set_style_text_color(posYlabel, lv_color_black(), 0);
@@ -488,7 +623,7 @@ void test_screen(void)
 
     lv_obj_t *posZmove = lv_btn_create(testScreen);
     lv_obj_set_size(posZmove, move_btn_w, move_btn_h);
-    lv_obj_align(posZmove, LV_ALIGN_TOP_MID, gap_x, 260);
+    lv_obj_align(posZmove, LV_ALIGN_TOP_MID, gap_x, 200);
     lv_obj_t *posZlabel = lv_label_create(posZmove);
     lv_label_set_text(posZlabel, "+10 Z");
     lv_obj_set_style_text_color(posZlabel, lv_color_black(), 0);
@@ -498,7 +633,7 @@ void test_screen(void)
     // --- NEGATIVE MOVES (Bottom Row) ---
     lv_obj_t *negXmove = lv_btn_create(testScreen);
     lv_obj_set_size(negXmove, move_btn_w, move_btn_h);
-    lv_obj_align(negXmove, LV_ALIGN_TOP_MID, -gap_x, 335); // 260 + 60 (height) + 15 (gap)
+    lv_obj_align(negXmove, LV_ALIGN_TOP_MID, -gap_x, 255); // 200 + 45 (height) + 10 (gap)
     lv_obj_t *negXlabel = lv_label_create(negXmove);
     lv_label_set_text(negXlabel, "-10 X");
     lv_obj_set_style_text_color(negXlabel, lv_color_black(), 0);
@@ -507,7 +642,7 @@ void test_screen(void)
 
     lv_obj_t *negYmove = lv_btn_create(testScreen);
     lv_obj_set_size(negYmove, move_btn_w, move_btn_h);
-    lv_obj_align(negYmove, LV_ALIGN_TOP_MID, 0, 335);
+    lv_obj_align(negYmove, LV_ALIGN_TOP_MID, 0, 255);
     lv_obj_t *negYlabel = lv_label_create(negYmove);
     lv_label_set_text(negYlabel, "-10 Y");
     lv_obj_set_style_text_color(negYlabel, lv_color_black(), 0);
@@ -516,14 +651,14 @@ void test_screen(void)
 
     lv_obj_t *negZmove = lv_btn_create(testScreen);
     lv_obj_set_size(negZmove, move_btn_w, move_btn_h);
-    lv_obj_align(negZmove, LV_ALIGN_TOP_MID, gap_x, 335);
+    lv_obj_align(negZmove, LV_ALIGN_TOP_MID, gap_x, 255);
     lv_obj_t *negZlabel = lv_label_create(negZmove);
     lv_label_set_text(negZlabel, "-10 Z");
     lv_obj_set_style_text_color(negZlabel, lv_color_black(), 0);
     lv_obj_center(negZlabel);
     lv_obj_add_event_cb(negZmove, zNeg_event_cb, LV_EVENT_CLICKED, NULL);
 
-    lvgl_port_unlock(); 
+    lvgl_port_unlock();
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -550,7 +685,7 @@ void display_update_status(const char *text)
 
 static void switch_to_test_screen(lv_event_t *e)
 {
-     if (!lvgl_port_lock(0))
+    if (!lvgl_port_lock(0))
         return;
 
     ESP_LOGI(TAG, "Switching to test screen...");

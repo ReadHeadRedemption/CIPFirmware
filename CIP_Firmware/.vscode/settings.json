@@ -3,7 +3,7 @@
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],
-  "idf.portWin": "COM5",
+  "idf.portWin": "COM9",
   "idf.currentSetup": "C:\\esp\\v5.5.4\\esp-idf",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
@@ -15,5 +15,5 @@
     "--compile-commands-dir=c:\\Users\\ethan\\Documents\\GitHub\\CIPFirmware\\CIP_Firmware\\build"
   ],
   "idf.flashType": "UART",
-  "idf.monitorPort": "COM5"
+  "idf.monitorPort": "COM9"
 }

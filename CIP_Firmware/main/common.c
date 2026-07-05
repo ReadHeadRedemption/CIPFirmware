@@ -16,6 +16,8 @@ SemaphoreHandle_t i2c_mutex = NULL;
 SemaphoreHandle_t allowMove = NULL;
 SemaphoreHandle_t nohead = NULL;
 
+TaskHandle_t parserHandle = NULL;
+
 MoveCmd_t head = {
     .target_x = 0.0f,
     .target_y = 0.0f,

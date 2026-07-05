@@ -3,7 +3,7 @@
 #include "IOExpander.h"
 #include "esp_task_wdt.h"
 
-#define DEBUG_PURGE
+//#define DEBUG_PURGE
 
 static const char *TAG = "GCODE_PARSER";
 
@@ -15,8 +15,6 @@ float extrude = 0.0f;
 float total_extruded = 0.0f;
 
 bool distMode = true;
-
-
 
 // Temp file location to load into the esp32
 void readParseFile(char *fileLocation)
@@ -33,15 +31,15 @@ void readParseFile(char *fileLocation)
     else
     {
         ESP_LOGI(TAG, "Successfully opened G-code file: %s", fileLocation);
-        
-        #ifdef DEBUG_PURGE
-        char up[] = "G0 Z5.5 F20000";
+
+#ifdef DEBUG_PURGE
+        char up[] = "G0 Z5.5";
 
         char mini_extrude[] = "G1 E40 F200";
         // char down[] = "G0 Z0.5";
 
         // TEMPORARY CODE FOR INITIAL EXTRUSION
-        parse(up); 
+        parse(up);
         parse(mini_extrude);
         for (int i = 0; i < 10; i++)
         {
@@ -51,15 +49,15 @@ void readParseFile(char *fileLocation)
         // vTaskDelay(pdMS_TO_TICKS(10000));
         // parse(down);
 
-        #endif /* DEBUG_PURGE */
+#endif /* DEBUG_PURGE */
 
-       
         while (fgets(line, sizeof(line), file))
         {
             parse(line);
+            //vTaskDelay(pdMS_TO_TICKS(5000));
         }
         fclose(file);
-        ESP_LOGI(TAG,"FINISH READING FILE");
+        ESP_LOGI(TAG, "FINISH READING FILE");
     }
 }
 
@@ -140,6 +138,10 @@ void parse(char *line)
                     head.feed_rate_hz = feed;
                     ESP_LOGI(TAG, "Parsed F: %ld", feed);
                 }
+                else 
+                {
+                    head.feed_rate_hz = 5000;
+                }
                 if (distMode)
                 {
                     if (coordChange[0])
@@ -170,8 +172,12 @@ void parse(char *line)
                 if ((p = strchr(line, 'F')) != NULL)
                 {
                     sscanf(p + 1, "%ld", &feed);
-                    head.feed_rate_hz = feed;                    
+                    head.feed_rate_hz = feed;
                     ESP_LOGI(TAG, "Parsed G1 F: %ld", feed);
+                }
+                else
+                {
+                    head.feed_rate_hz = 4000;
                 }
                 if ((p = strchr(line, 'E')) != NULL)
                 {
@@ -188,8 +194,8 @@ void parse(char *line)
                         // ESP_LOGI(TAG, "cords[%d]: %.3f", i, cords[i]);
                     }
                     extrude = (float)sqrt((dE[0] * dE[0]) +
-                                                (dE[1] * dE[1]) +
-                                                (dE[2] * dE[2]));
+                                          (dE[1] * dE[1]) +
+                                          (dE[2] * dE[2]));
                     head.moveE += extrude * scale * eScale;
                 }
                 head.feed_rate_hz = 200;
@@ -224,10 +230,10 @@ void parse(char *line)
                 if (pullback)
                 {
                     head.feed_rate_hz = 200;
-                    head.moveE -= extrude * (scale * eScale * 1.0f - 0.00002f);
+                    head.moveE -= extrude * (scale * eScale * 0.15f); // Pull back 15% of the extruded amount
                     // head.moveE = 0;
                     ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f",
-                            head.target_x, head.target_y, head.target_z);
+                             head.target_x, head.target_y, head.target_z);
                     ESP_LOGI(TAG, "PUSHING HEAD TO %.3f (%.5f) MM", head.moveE, head.moveE);
                     coordinated_move(&head);
                     head.feed_rate_hz = 500;
@@ -304,7 +310,7 @@ void parse(char *line)
                 sscanf(p + 1, "%d", &delay); // Use %f for float!
             }
             ESP_LOGI(TAG, "CALLING G4: DELAY FOR %d SECONDS", delay);
-            vTaskDelay(pdMS_TO_TICKS(delay * 1000));
+            vTaskDelay(pdMS_TO_TICKS(delay*1000));
         }
         else if (strcmp(cmd, "G20") == 0) // Set Unit In
         {
@@ -333,7 +339,7 @@ void parse(char *line)
         }
     }
     else if (cmd[0] == 'M')
-    {      
+    {
         if (strcmp(cmd, "M118") == 0 || strcmp(cmd, "M240") == 0)
         {
             char data_to_receive[100];
@@ -364,11 +370,27 @@ void parse(char *line)
         }
         else if (strcmp(cmd, "M140") == 0)
         {
-            ESP_LOGI(TAG,"SET BED TEMP x DEGREES");
+            int temp = -1;
+            if ((p = strchr(line, 'S')) != NULL)
+            {
+                ESP_LOGI(TAG, "BED TEMP NONBLOCKING");
+                sscanf(p + 1, "%d", &temp);
+                // Just set bed temp and keep going
+            }
         }
         else if (strcmp(cmd, "190") == 0)
         {
-            ESP_LOGI(TAG, "WAIT FOR BED TO REACH x DEGREES");
+            int temp = -1;
+            if ((p = strchr(line, 'S')) != NULL)
+            {
+                ESP_LOGI(TAG, "BED TEMP BLOCKING ");
+                sscanf(p + 1, "%d", &temp);
+                // Set bed temp and keep checking until its what is desired
+                // while (temp !=) // Read in temp from MAX
+                // {
+                //     vTaskDelay(pdMS_TO_TICKS(3000)) // 3 second wait
+                // }
+            }
         }
     }
     else if (cmd[0] == 'T') // tool change commands
@@ -394,7 +416,7 @@ void parse(char *line)
         {
             char *toolIndex[] = {"Conductive Ink", "Insulator Ink", "Camera", NULL};
             ESP_LOGI(TAG, "CALLING T: TOOL CHANGE TO %s", toolIndex[tool]);
-            //changeTool(tool);
+            // changeTool(tool);
 
             // 2. Fixed IO Check Loop
             ESP_LOGI(TAG, "Address of handle: %p", (void *)io_expander);

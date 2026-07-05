@@ -56,6 +56,7 @@ extern SemaphoreHandle_t SDCardMutex;
 extern SemaphoreHandle_t allowMove;
 extern SemaphoreHandle_t i2c_mutex;
 extern SemaphoreHandle_t nohead;
+extern TaskHandle_t parserHandle;
 
 extern esp_io_expander_handle_t io_expander;
 

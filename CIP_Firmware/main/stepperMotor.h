@@ -1,6 +1,5 @@
 #ifndef STEPPER_MOTOR_H
 #define STEPPER_MOTOR_H
-
 #include "common.h"
 #include "driver/mcpwm_prelude.h"
 #include "pins.h"
@@ -8,13 +7,13 @@
 
 #define xMicroStepping 32.0f
 #define yMicroStepping 32.0f
-#define zMicroStepping 8.0f
+#define zMicroStepping 32.0f
 #define eMicroStepping 32.0f
 
 #define MotorStepsPerRev (360.0f / 1.8f)
 
 // Calculate steps per mm as compile-time constants
-#define xStepsPerMM  ((MotorStepsPerRev * zMicroStepping) / (20.0f * 2.0f))   // 20 tooth gear w/ 2mm belt pitch
+#define xStepsPerMM  ((MotorStepsPerRev * xMicroStepping) / (20.0f * 2.0f))   // 20 tooth gear w/ 2mm belt pitch
 #define yStepsPerMM  ((MotorStepsPerRev * yMicroStepping) / (20.0f * 2.0f))
 #define zStepsPerMM  ((MotorStepsPerRev * zMicroStepping) / 8.0f)             // 8mm shift per revolution
 #define eStepsPerMM  ((MotorStepsPerRev * eMicroStepping) / 1.0f)
@@ -91,5 +90,7 @@ esp_err_t homeMotors();
  * @brief Updates the motor configuration to the current tool that is used
  */
 esp_err_t changeTool(int tool);
+
+void position();
 
 #endif // STEPPER_MOTOR_H
