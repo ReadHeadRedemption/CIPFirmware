@@ -163,7 +163,7 @@ void HeaterControl()
         {
             ESP_LOGE(TAG, "Failed to measure: %d (%s)", res, esp_err_to_name(res));
             if (SSRE != GPIO_NUM_NC) gpio_set_level(SSRE, 0);
-            vTaskDelete(NULL);
+            // vTaskDelete(NULL);
         }
         else
         {

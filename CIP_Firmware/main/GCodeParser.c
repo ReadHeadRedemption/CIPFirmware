@@ -3,7 +3,7 @@
 #include "IOExpander.h"
 #include "esp_task_wdt.h"
 
-//#define DEBUG_PURGE
+// #define DEBUG_PURGE
 
 static const char *TAG = "GCODE_PARSER";
 
@@ -54,7 +54,7 @@ void readParseFile(char *fileLocation)
         while (fgets(line, sizeof(line), file))
         {
             parse(line);
-            //vTaskDelay(pdMS_TO_TICKS(5000));
+            // vTaskDelay(pdMS_TO_TICKS(5000));
         }
         fclose(file);
         ESP_LOGI(TAG, "FINISH READING FILE");
@@ -138,7 +138,7 @@ void parse(char *line)
                     head.feed_rate_hz = feed;
                     ESP_LOGI(TAG, "Parsed F: %ld", feed);
                 }
-                else 
+                else
                 {
                     head.feed_rate_hz = 5000;
                 }
@@ -238,14 +238,14 @@ void parse(char *line)
                     coordinated_move(&head);
                     head.feed_rate_hz = 500;
                 }
-
+                // WAITING FOR 100 MILLISECONDS TO LET SOLDER PASTE STICK
+                if (fabs(lastLocation[X] - head.target_x) > 1.0f || fabs(lastLocation[Y] - head.target_y) > 1.0f)
+                    vTaskDelay(pdMS_TO_TICKS(100));
                 total_extruded += extrude;
                 break;
             default:
                 break;
             }
-            // WAITING FOR 100 MILLISECONDS TO LET SOLDER PASTE STICK
-            vTaskDelay(pdMS_TO_TICKS(100));
         }
         else if ((strcmp(cmd, "G2") == 0) ||
                  (strcmp(cmd, "G3") == 0))
@@ -304,13 +304,13 @@ void parse(char *line)
         }
         else if (strcmp(cmd, "G4") == 0) // delay in seconds
         {
-            int delay = 0;
-            if ((p = strchr(line, 'P')) != NULL)
+            float delay = 0;
+            if ((p = strchr(line, 'S')) != NULL)
             {
-                sscanf(p + 1, "%d", &delay); // Use %f for float!
+                sscanf(p + 1, "%f", &delay); // Use %f for float!
             }
-            ESP_LOGI(TAG, "CALLING G4: DELAY FOR %d SECONDS", delay);
-            vTaskDelay(pdMS_TO_TICKS(delay*1000));
+            ESP_LOGI(TAG, "CALLING G4: DELAY FOR %.3f SECONDS", delay);
+            vTaskDelay(pdMS_TO_TICKS(delay * 1000));
         }
         else if (strcmp(cmd, "G20") == 0) // Set Unit In
         {
@@ -325,7 +325,32 @@ void parse(char *line)
         else if (strcmp(cmd, "G28") == 0) // Home motors
         {
             ESP_LOGI(TAG, "CALLING G28: HOMING SEQUENCE");
-            homeMotors();
+            if ((p = strchr(line, 'X')) != NULL)
+            {
+                sscanf(p + 1, "%f", &cords[X]); // Use %f for float!
+                coordChange[X] = true;
+                ESP_LOGI(TAG, "Parsed X: %.3f", cords[X]);
+            }
+            // Check Y
+            if ((p = strchr(line, 'Y')) != NULL)
+            {
+                sscanf(p + 1, "%f", &cords[Y]);
+                ESP_LOGI(TAG, "Parsed Y: %.3f", cords[Y]);
+                coordChange[Y] = true;
+            }
+            if (coordChange[X] || coordChange[Y])
+            {
+                head.target_x = cords[X] * scale;
+                head.target_y = cords[Y] * scale;
+                head.target_z = 100.0f * scale;
+                coordinated_move(&head);
+            }
+            else
+            {
+                ESP_LOGI(TAG, "HOMING ALL MOTORS");
+                homeMotors();
+            }
+            
         }
         else if (strcmp(cmd, "G90") == 0) // Set Distance Mode Absolute
         {
@@ -386,11 +411,11 @@ void parse(char *line)
             {
                 sscanf(p + 1, "%f", &set_temp);
             }
-                
+
             ESP_LOGI(TAG, "WAIT FOR BED TO REACH %f DEGREES", set_temp);
             xQueueSend(temperature_queue, &set_temp, 1);
-                
-            xSemaphoreTake(tempReachedSemaphore, portMAX_DELAY); 
+
+            xSemaphoreTake(tempReachedSemaphore, portMAX_DELAY);
 
             printf("Tempature Reached\n");
         }

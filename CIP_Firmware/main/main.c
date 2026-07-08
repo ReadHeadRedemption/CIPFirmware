@@ -135,26 +135,31 @@ static void console_task(void *arg)
         else if (strcmp(line, "test") == 0)
         {
             ESP_LOGI(TAG, "Test command received");
+            printf("\n");
         }
         // Process line
         else if (strcmp(line, "home") == 0)
         {
             homeMotors();
+            printf("\n");
         }
         else if (strcmp(line, "sdinfo") == 0)
         {
             sdInfo();
+            printf("\n");
         }
         else if (strcmp(line, "stop") == 0)
         {
             vTaskSuspend(parserHandle);
             parse("G1 E-600");
             ESP_LOGI(TAG, "STOPPING");
+            printf("\n");
         }
         else if (strcmp(line, "head?") == 0)
         {
             int state = readHeadState();
             printf("TOOL HEAD: %d", state);
+            printf("\n");
         }
         else if (strcmp(line, "where") == 0)
         {
@@ -380,7 +385,7 @@ void app_main(void)
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     //  Create heater control task
-    // xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
+    xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
     //   Create G-code parser task
     xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, &parserHandle);
     xTaskCreate(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL);

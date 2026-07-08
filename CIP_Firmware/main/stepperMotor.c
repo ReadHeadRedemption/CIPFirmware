@@ -186,7 +186,6 @@ esp_err_t changeTool(int tool)
     return ESP_OK;
 }
 
-
 esp_err_t coordinated_move(MoveCmd_t *move)
 {
 
@@ -684,7 +683,7 @@ esp_err_t homeMotors()
             motors[MOTOR_X].position = 0.0f;
             homer.target_x = 0.0f; // Reset target so Y/Z moves don't go crazy
             axis_homed[MOTOR_X] = true;
-             if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
             {
                 gpio_set_level(motors[MOTOR_X].enable_pin, 0);
                 xSemaphoreGive(i2c_mutex);
@@ -732,7 +731,7 @@ esp_err_t homeMotors()
             motors[MOTOR_Z].position = 0.0f;
             homer.target_z = 0.0f;
             axis_homed[MOTOR_Z] = true;
-             if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
             {
                 gpio_set_level(motors[MOTOR_Z].enable_pin, 0);
                 xSemaphoreGive(i2c_mutex);
@@ -742,9 +741,11 @@ esp_err_t homeMotors()
     }
 
     // Move to offset position
+
+    homer.target_z = 30.0f;
+    coordinated_move(&homer);
     homer.target_x = 33.0f;
     homer.target_y = 239.0f;
-    homer.target_z = 30.0f;
     coordinated_move(&homer);
 
     // // Set actual home
