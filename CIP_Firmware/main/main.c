@@ -92,18 +92,18 @@ static void checkSwitches(void *pvParameters)
         if (levels[0] == 1)
         {
             xSemaphoreGive(xSwitchSemaphore);
-            printf("X switch triggered\n");
+            // printf("X switch triggered\n");
         }
         if (levels[1] == 1)
         {
             xSemaphoreGive(ySwitchSemaphore);
-            printf("Y switch triggered\n");
+            // printf("Y switch triggered\n");
         }
         if (levels[2] == 1)
         {
 
             xSemaphoreGive(zSwitchSemaphore);
-            printf("Z switch triggered\n");
+            // printf("Z switch triggered\n");
         }
         if (levels[3] == 1)
         {
@@ -385,7 +385,7 @@ void app_main(void)
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     //  Create heater control task
-    xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
+    // xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
     //   Create G-code parser task
     xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, &parserHandle);
     xTaskCreate(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL);

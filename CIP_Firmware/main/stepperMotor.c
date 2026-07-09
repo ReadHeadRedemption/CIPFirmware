@@ -213,11 +213,6 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     if (max_steps == 0)
         return ESP_OK;
 
-    for (int i = 0; i < NUM_MOTORS; i++)
-    {
-        gpio_set_level(motors[i].enable_pin, 0);
-    }
-
     // 2. Set Directions for X, Y, Z
     stepper_set_direction(MOTOR_X, (dx >= 0) ? 0 : 1);
     stepper_set_direction(MOTOR_Y, (dy >= 0) ? 0 : 1);
@@ -406,11 +401,6 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     for (int i = 0; i < 4; i++)
         motors[i].targetStep += actual_steps[i];
 
-    for (int i = 0; i < NUM_MOTORS; i++)
-    {
-        gpio_set_level(motors[i].enable_pin, 1);
-    }
-
     return ESP_OK;
 }
 
@@ -431,11 +421,6 @@ esp_err_t circular_move(MoveCmd_t *arc)
     float radius = sqrtf(r_start_x * r_start_x + r_start_y * r_start_y);
     float start_angle = atan2f(r_start_y, r_start_x);
     float end_angle = atan2f(r_end_y, r_end_x);
-
-    for (int i = 0; i < NUM_MOTORS; i++)
-    {
-        gpio_set_level(motors[i].enable_pin, 0);
-    }
 
     float end_radius = sqrtf(r_end_x * r_end_x + r_end_y * r_end_y);
     if (fabsf(radius - end_radius) > 0.5f)
@@ -629,11 +614,6 @@ esp_err_t circular_move(MoveCmd_t *arc)
         motors[MOTOR_E].position = next_e;
     }
 
-    for (int i = 0; i < NUM_MOTORS; i++)
-    {
-        gpio_set_level(motors[i].enable_pin, 1);
-    }
-
     return ESP_OK;
 }
 
@@ -668,8 +648,12 @@ esp_err_t homeMotors()
     // HOME X AXIS
     // ----------------------------------------------------------------
     // Flush any stale switch triggers before starting the loop
-    xSemaphoreTake(xSwitchSemaphore, 1);
-
+    xSemaphoreTake(xSwitchSemaphore, 0);
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(motors[MOTOR_X].enable_pin, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
     while (!axis_homed[MOTOR_X])
     {
         homer.target_x -= 1.0f;
@@ -683,9 +667,9 @@ esp_err_t homeMotors()
             motors[MOTOR_X].position = 0.0f;
             homer.target_x = 0.0f; // Reset target so Y/Z moves don't go crazy
             axis_homed[MOTOR_X] = true;
-            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+            if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
             {
-                gpio_set_level(motors[MOTOR_X].enable_pin, 0);
+                gpio_set_level(motors[MOTOR_X].enable_pin, 1);
                 xSemaphoreGive(i2c_mutex);
             }
             ESP_LOGI(TAG, "X axis homed");
@@ -696,6 +680,11 @@ esp_err_t homeMotors()
     // HOME Y AXIS
     // ----------------------------------------------------------------
     xSemaphoreTake(ySwitchSemaphore, 0);
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(motors[MOTOR_Y].enable_pin, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
     while (!axis_homed[MOTOR_Y])
     {
         homer.target_y -= 1.0f;
@@ -706,9 +695,9 @@ esp_err_t homeMotors()
         {
             motors[MOTOR_Y].position = 0.0f;
             homer.target_y = 0.0f;
-            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+            if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
             {
-                gpio_set_level(motors[MOTOR_Y].enable_pin, 0);
+                gpio_set_level(motors[MOTOR_Y].enable_pin, 1);
                 xSemaphoreGive(i2c_mutex);
             }
             axis_homed[MOTOR_Y] = true;
@@ -720,6 +709,11 @@ esp_err_t homeMotors()
     // HOME Z AXIS
     // ----------------------------------------------------------------
     xSemaphoreTake(zSwitchSemaphore, 0);
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(motors[MOTOR_Z].enable_pin, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
     while (!axis_homed[MOTOR_Z])
     {
         homer.target_z -= 1.0f;
@@ -731,9 +725,9 @@ esp_err_t homeMotors()
             motors[MOTOR_Z].position = 0.0f;
             homer.target_z = 0.0f;
             axis_homed[MOTOR_Z] = true;
-            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+            if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
             {
-                gpio_set_level(motors[MOTOR_Z].enable_pin, 0);
+                gpio_set_level(motors[MOTOR_Z].enable_pin, 1);
                 xSemaphoreGive(i2c_mutex);
             }
             ESP_LOGI(TAG, "Z axis homed");

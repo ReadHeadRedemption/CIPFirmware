@@ -16,13 +16,29 @@ float total_extruded = 0.0f;
 
 bool distMode = true;
 
-// Temp file location to load into the esp32
+static LineCountCallback lineCountCb = NULL;
+static HeadChangeCallback headCallback = NULL;
+
+void setLineCountCallback(LineCountCallback callback)
+{
+    lineCountCb = callback;
+}
+int totalLines = -1;
+int readLines = 0;
+
+void setHeadCallback(HeadChangeCallback callback)
+{
+    headCallback = callback;
+}
+int current_head_id = 3;
+
 void readParseFile(char *fileLocation)
 {
     parseSemaphore = xSemaphoreCreateMutex();
     FILE *file = fopen(fileLocation, "r");
     char line[128];
-
+    totalLines = 0;
+    readLines = 0;
     if (file == NULL)
     {
         ESP_LOGE(TAG, "Failed to open G-code file: %s", fileLocation);
@@ -31,7 +47,12 @@ void readParseFile(char *fileLocation)
     else
     {
         ESP_LOGI(TAG, "Successfully opened G-code file: %s", fileLocation);
-
+        if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+        {
+            gpio_set_level(zEnable, 0);
+            gpio_set_level(eEnable, 0);
+            xSemaphoreGive(i2c_mutex);
+        }
 #ifdef DEBUG_PURGE
         char up[] = "G0 Z5.5";
 
@@ -51,10 +72,24 @@ void readParseFile(char *fileLocation)
 
 #endif /* DEBUG_PURGE */
 
+        char *found = strstr(fgets(line, sizeof(line), file), "TOTAL_LINES:");
+
+        if (found != NULL)
+        {
+            sscanf(found, "TOTAL_LINES:%d", &totalLines);
+            printf("Total lines: %d\n", totalLines);
+        }
+        rewind(file);
+
         while (fgets(line, sizeof(line), file))
         {
             parse(line);
             // vTaskDelay(pdMS_TO_TICKS(5000));
+            readLines++;
+            if (lineCountCb != NULL)
+            {
+                lineCountCb(readLines, totalLines); // Notify display immediately
+            }
         }
         fclose(file);
         ESP_LOGI(TAG, "FINISH READING FILE");
@@ -78,6 +113,7 @@ void parse(char *line)
     */
     sscanf(line, "%7s", cmd);
     ESP_LOGI(TAG, "COMMAND: %s", cmd);
+
     char *commentStart = strchr(line, ';');
     if (commentStart != NULL)
     {
@@ -102,6 +138,11 @@ void parse(char *line)
                 sscanf(p + 1, "%f", &cords[X]); // Use %f for float!
                 coordChange[0] = true;
                 ESP_LOGI(TAG, "Parsed X: %.3f", cords[X]);
+                if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+                {
+                    gpio_set_level(xEnable, 0);
+                    xSemaphoreGive(i2c_mutex);
+                }
             }
             // Check Y
             if ((p = strchr(line, 'Y')) != NULL)
@@ -109,6 +150,11 @@ void parse(char *line)
                 sscanf(p + 1, "%f", &cords[Y]);
                 ESP_LOGI(TAG, "Parsed Y: %.3f", cords[Y]);
                 coordChange[1] = true;
+                if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+                {
+                    gpio_set_level(yEnable, 0);
+                    xSemaphoreGive(i2c_mutex);
+                }
             }
             // Check Z
             if ((p = strchr(line, 'Z')) != NULL)
@@ -117,7 +163,7 @@ void parse(char *line)
                 sscanf(p + 1, "%f", &cords[Z]);
                 ESP_LOGI(TAG, "Parsed Z: %.3f", cords[Z]);
             }
-
+            float lastLocation[3] = {head.target_x, head.target_y, head.target_z};
             /* COMMENTED OUT TEMPORARILY TO ADD DIFFERENT DEFAULT RATES FOR G0 (RAPID MOVE) VS G1 (PRINTING MOVE)*/
             // Check F
             // if ((p = strchr(line, 'F')) != NULL)
@@ -166,7 +212,6 @@ void parse(char *line)
                 break;
             case 1: // linear movement
                 ESP_LOGI(TAG, "CALLING G1");
-                float lastLocation[3] = {head.target_x, head.target_y, head.target_z};
                 float dE[3] = {0.0f};
                 // NOTE: WITH THE WAY THE CODE IS WRITTEN, ANY FEED RATE INSERTION IS ESSENTIALLY IGNORED AND OVERWRITTEN
                 if ((p = strchr(line, 'F')) != NULL)
@@ -196,6 +241,7 @@ void parse(char *line)
                     extrude = (float)sqrt((dE[0] * dE[0]) +
                                           (dE[1] * dE[1]) +
                                           (dE[2] * dE[2]));
+
                     head.moveE += extrude * scale * eScale;
                 }
                 head.feed_rate_hz = 200;
@@ -246,6 +292,15 @@ void parse(char *line)
             default:
                 break;
             }
+            if ((fabs(lastLocation[X] - head.target_x) <= 1.0f || fabs(lastLocation[Y] - head.target_y) <= 1.0f))
+            {
+                if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+                {
+                    gpio_set_level(xEnable, 1);
+                    gpio_set_level(yEnable, 1);
+                    xSemaphoreGive(i2c_mutex);
+                }
+            }
         }
         else if ((strcmp(cmd, "G2") == 0) ||
                  (strcmp(cmd, "G3") == 0))
@@ -254,12 +309,22 @@ void parse(char *line)
             {
                 sscanf(p + 1, "%f", &cords[X]); // Use %f for float!
                 coordChange[0] = true;
+                if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+                {
+                    gpio_set_level(xEnable, 0);
+                    xSemaphoreGive(i2c_mutex);
+                }
             }
             // Check Y
             if ((p = strchr(line, 'Y')) != NULL)
             {
                 sscanf(p + 1, "%f", &cords[Y]);
                 coordChange[1] = true;
+                if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+                {
+                    gpio_set_level(yEnable, 0);
+                    xSemaphoreGive(i2c_mutex);
+                }
             }
             float I = 0.0f, J = 0.0f;
             // Check I
@@ -275,6 +340,7 @@ void parse(char *line)
             if ((p = strchr(line, 'E')) != NULL)
             {
                 sscanf(p + 1, "%f", &extrude);
+
                 head.moveE += extrude * scale * eScale;
             }
             int g = atoi(cmd + 1);
@@ -290,7 +356,9 @@ void parse(char *line)
                                         (dE[1] * dE[1]) +
                                         (dE[2] * dE[2]) +
                                         (dE[3] * dE[3])); // CHANGE TO ARC CALCULATION
+
             head.moveE += extrude * scale * eScale;
+
             if (coordChange[0])
                 head.target_x = cords[X] * scale;
             if (coordChange[1])
@@ -301,6 +369,15 @@ void parse(char *line)
                      head.target_x, head.target_y, head.center_x, head.center_y);
             ESP_LOGI(TAG, "PUSHING HEAD %.3f MM", head.moveE);
             circular_move(&head);
+            if ((fabs(lastLocation[X] - head.target_x) <= 1.0f || fabs(lastLocation[Y] - head.target_y) <= 1.0f))
+            {
+                if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+                {
+                    gpio_set_level(xEnable, 1);
+                    gpio_set_level(yEnable, 1);
+                    xSemaphoreGive(i2c_mutex);
+                }
+            }
         }
         else if (strcmp(cmd, "G4") == 0) // delay in seconds
         {
@@ -350,7 +427,6 @@ void parse(char *line)
                 ESP_LOGI(TAG, "HOMING ALL MOTORS");
                 homeMotors();
             }
-            
         }
         else if (strcmp(cmd, "G90") == 0) // Set Distance Mode Absolute
         {
@@ -365,7 +441,22 @@ void parse(char *line)
     }
     else if (cmd[0] == 'M')
     {
-        if (strcmp(cmd, "M118") == 0 || strcmp(cmd, "M240") == 0)
+        if (strcmp(cmd, "M0") == 0)
+        {
+        }
+        else if (strcmp(cmd, "M84") == 0)
+        {
+            if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+            {
+                gpio_set_level(xEnable, 1);
+                gpio_set_level(yEnable, 1);
+                gpio_set_level(zEnable, 1);
+                gpio_set_level(eEnable, 1);
+                xSemaphoreGive(i2c_mutex);
+            }
+            ESP_LOGI(TAG, "DISABLING MOTORS");
+        }
+        else if (strcmp(cmd, "M118") == 0 || strcmp(cmd, "M240") == 0)
         {
             char data_to_receive[100];
 
@@ -422,11 +513,17 @@ void parse(char *line)
     }
     else if (cmd[0] == 'T') // tool change commands
     {
-        head.target_x = 0 * scale;
-        head.target_y = 0 * scale;
+        head.target_x = 0;
+        head.target_y = 0;
         head.target_z = 100 * scale;
         coordinated_move(&head);
 
+        // Disable extruder to swap toolhead
+        if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+        {
+            gpio_set_level(eEnable, 1);
+            xSemaphoreGive(i2c_mutex);
+        }
         int tool = 0;
         if ((p = strchr(line, 'T')) != NULL)
         {
@@ -446,7 +543,6 @@ void parse(char *line)
             // changeTool(tool);
 
             // 2. Fixed IO Check Loop
-            ESP_LOGI(TAG, "Address of handle: %p", (void *)io_expander);
             if (io_expander == NULL)
             {
                 ESP_LOGE(TAG, "THE HANDLE IS NULL RIGHT BEFORE USE!");
@@ -459,7 +555,17 @@ void parse(char *line)
             while (headID != tool)
             {
                 headID = readHeadState();
-                vTaskDelay(pdMS_TO_TICKS(100));
+                if (headCallback != NULL)
+                {
+                    headCallback(headID);
+                }
+                vTaskDelay(pdMS_TO_TICKS(500));
+            }
+
+            if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+            {
+                gpio_set_level(eEnable, 0);
+                xSemaphoreGive(i2c_mutex);
             }
             ESP_LOGI(TAG, "Tool change successful.");
         }

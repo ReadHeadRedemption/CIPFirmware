@@ -21,6 +21,7 @@ static lv_obj_t *g_status_label = NULL;
 static lv_obj_t *g_main_screen = NULL;
 static lv_obj_t *testScreen = NULL;
 static lv_obj_t *printScreen = NULL;
+static lv_obj_t *printFinishedScreen = NULL;
 
 static void home_screen_cb(lv_event_t *e)
 {
@@ -35,7 +36,99 @@ static void home_screen_cb(lv_event_t *e)
 
 ///////////////////////////////////////////////////////////////////////////
 //
-//                          FACTIVE PRINT SCREEN
+//                          AFTER PRINT SCREEN
+//
+///////////////////////////////////////////////////////////////////////////
+
+static void reflow_parts_cb(lv_event_t *e)
+{
+    vTaskSuspend(parserHandle); // Stop the parser task to prevent any new commands from being processed during reflow
+    printf("Reflowing parts...\n");
+    parse("G1 E-400 F200"); // large pull out to stop ink extrusion
+    parse("G0 X0 Y-20 Z150");
+    parse("M190 S90");
+    parse("G4 P300"); // Sleep for a while, seconds
+    parse("M190 S170");
+    parse("G4 P900"); // Sleep for a while, seconds
+    parse("M190 S0");
+    parse("G4 S1800"); // cool-down wait 30 min
+}
+
+void show_print_finished_screen()
+{
+    if (!lvgl_port_lock(0))
+        return;
+
+    ESP_LOGI(TAG, "Creating print finished screen...");
+
+    // ====================================================
+    // MEMORY MANAGEMENT: Clean old screen if it exists
+    // ====================================================
+    if (printFinishedScreen == NULL)
+    {
+        printFinishedScreen = lv_obj_create(NULL);
+        ESP_LOGI(TAG, "Created new screen object");
+    }
+    else
+    {
+        lv_obj_clean(printFinishedScreen);
+        ESP_LOGI(TAG, "Cleaned existing screen");
+    }
+
+    lv_obj_set_style_text_font(printFinishedScreen, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_bg_color(printFinishedScreen, lv_color_white(), 0);
+    lv_obj_set_style_text_color(printFinishedScreen, lv_color_black(), 0);
+
+    // ====================================================
+    // 1. HEADER
+    // ====================================================
+    lv_obj_t *header_label = lv_label_create(printFinishedScreen);
+    lv_label_set_text(header_label, "Print Finished");
+    lv_obj_align(header_label, LV_ALIGN_TOP_LEFT, 10, 15);
+
+    // Back Button
+    lv_obj_t *back_btn = lv_btn_create(printFinishedScreen);
+    lv_obj_set_size(back_btn, 65, 35);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_RIGHT, -5, 5);
+    lv_obj_t *back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "BACK");
+    lv_obj_set_style_text_color(back_label, lv_color_black(), 0);
+    lv_obj_center(back_label);
+    lv_obj_add_event_cb(back_btn, home_screen_cb, LV_EVENT_CLICKED, NULL);
+
+    // ====================================================
+    // 2. STATUS MESSAGE
+    // ====================================================
+    lv_obj_t *status_label = lv_label_create(printFinishedScreen);
+    lv_obj_set_width(status_label, 220);
+    lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(status_label, "Your print is complete!");
+    lv_obj_align(status_label, LV_ALIGN_TOP_MID, 0, 60);
+
+    // ====================================================
+    // 3. REFLOW PARTS BUTTON
+    // ====================================================
+    lv_obj_t *reflow_btn = lv_btn_create(printFinishedScreen);
+    lv_obj_set_size(reflow_btn, 160, 60);
+    lv_obj_align(reflow_btn, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(reflow_btn, lv_palette_main(LV_PALETTE_BLUE), 0);
+
+    lv_obj_t *reflow_label = lv_label_create(reflow_btn);
+    lv_label_set_text(reflow_label, "REFLOW PARTS");
+    lv_obj_set_style_text_color(reflow_label, lv_color_white(), 0);
+    lv_obj_center(reflow_label);
+    lv_obj_add_event_cb(reflow_btn, reflow_parts_cb, LV_EVENT_CLICKED, NULL);
+
+    ESP_LOGI(TAG, "Loading print finished screen...");
+    lv_scr_load(printFinishedScreen);
+    ESP_LOGI(TAG, "Print finished screen loaded successfully");
+
+    lvgl_port_unlock();
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
+//                          ACTIVE PRINT SCREEN
 //
 ///////////////////////////////////////////////////////////////////////////
 
@@ -52,15 +145,49 @@ static void stop_print_cb(lv_event_t *e)
         return;
 
     vTaskSuspend(parserHandle);
-    MoveCmd_t head;
-    head.moveE = -200.0f;
-    coordinated_move(&head);
+    // head.moveE -= 200.0f;
+    // head.feed_rate_hz = 500;
+    // coordinated_move(&head);
+    parse("G0 Z100 F5000"); // Move Z up to avoid collision
     if (print_status_label)
     {
         lv_label_set_text(print_status_label, "Print STOPPED");
     }
     ESP_LOGI(TAG, "Print Stopped by User");
 
+    lvgl_port_unlock();
+}
+
+void onLineCountChanged(int readLines, int totalLines)
+{
+    //printf("Line Count Changed: %d / %d\n", readLines, totalLines);
+
+    if ((readLines >= totalLines && totalLines > 0))
+    {
+        show_print_finished_screen();
+
+        vTaskSuspend(parserHandle);
+    }
+    else
+    {
+        // Update the layer label safely
+        if (!lvgl_port_lock(0))
+            return;
+
+        if (layer_info_label != NULL)
+        {
+            lv_label_set_text_fmt(layer_info_label, "Current Step: %d / %d", readLines, totalLines);
+        }
+
+        lvgl_port_unlock();
+    }
+}
+
+void onToolHeadChanged(int headID)
+{
+    if (!lvgl_port_lock(0))
+        return;
+    lv_label_set_text_fmt(tool_head_label, "Current Tool Head: %d", headID);
     lvgl_port_unlock();
 }
 
@@ -118,14 +245,16 @@ void show_active_print_screen(const char *filename)
     tool_head_label = lv_label_create(activePrintScreen);
     lv_obj_set_width(tool_head_label, 220);
     lv_obj_set_style_text_align(tool_head_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_text(tool_head_label, "Tool Head: --"); // Placeholder
+    lv_label_set_text_fmt(tool_head_label, "Current Tool Head: ---");
     lv_obj_align(tool_head_label, LV_ALIGN_TOP_MID, 0, 120);
 
     layer_info_label = lv_label_create(activePrintScreen);
     lv_obj_set_width(layer_info_label, 220);
     lv_obj_set_style_text_align(layer_info_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_text(layer_info_label, "Current Layer: 0 / --"); // Placeholder
+    lv_label_set_text_fmt(layer_info_label, "Current Step: ---");
     lv_obj_align(layer_info_label, LV_ALIGN_TOP_MID, 0, 160);
+    setLineCountCallback(onLineCountChanged);
+    setHeadCallback(onToolHeadChanged);
 
     // ====================================================
     // 4. STOP BUTTON (Y: 230 - Anchored to bottom)

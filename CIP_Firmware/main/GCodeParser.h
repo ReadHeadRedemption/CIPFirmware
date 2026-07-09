@@ -25,5 +25,13 @@ void readParseFile(char *fileLocation);
 void parse(char *line);
 
 extern int current_head_id;
+extern int totalLines;
+extern int readLines;
+
+typedef void (*LineCountCallback)(int readLines, int totalLines);
+typedef void (*HeadChangeCallback)(int headID);
+
+void setLineCountCallback(LineCountCallback callback);
+void setHeadCallback(HeadChangeCallback callback);
 
 #endif
