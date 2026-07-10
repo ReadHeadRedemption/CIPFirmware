@@ -6,7 +6,6 @@
 
 //ESP32 Headers
 #include "driver/gpio.h"
-#include "driver/adc.h"
 #include "esp_log.h"
 #include "pins.h"
 #include "esp_console.h"
@@ -25,6 +24,9 @@
 //G-code Headers
 #include "GCodeParser.h"
 
+//Heater Headers
+#include "heater.h"
+
 //Display Headers
 #include "display.h"
 
@@ -35,6 +37,6 @@
 //will be removed when SD card is implemented
 #include "esp_spiffs.h"
 
-#include "heater.h"
+
 
 #endif

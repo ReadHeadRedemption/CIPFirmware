@@ -89,7 +89,7 @@ esp_err_t homeMotors();
 /**
  * @brief Updates the motor configuration to the current tool that is used
  */
-esp_err_t changeTool(int tool);
+esp_err_t kfact(int tool);
 
 void position();
 

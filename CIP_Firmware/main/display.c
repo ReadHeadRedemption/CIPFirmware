@@ -3,7 +3,7 @@
 #include "SD.h"
 #include "IOExpander.h"
 
-static const char *TAG = "DISPLAY";
+static const char *DISPLAYTAG = "DISPLAY";
 
 //  LCD size for 2.8" ILI9341
 #define LCD_H_RES 240
@@ -22,6 +22,7 @@ static lv_obj_t *g_main_screen = NULL;
 static lv_obj_t *testScreen = NULL;
 static lv_obj_t *printScreen = NULL;
 static lv_obj_t *printFinishedScreen = NULL;
+static lv_obj_t *loadingScreen = NULL;
 
 static void home_screen_cb(lv_event_t *e)
 {
@@ -39,6 +40,7 @@ static void home_screen_cb(lv_event_t *e)
 //                          AFTER PRINT SCREEN
 //
 ///////////////////////////////////////////////////////////////////////////
+lv_obj_t *reflow_temp = NULL;
 
 static void reflow_parts_cb(lv_event_t *e)
 {
@@ -54,12 +56,23 @@ static void reflow_parts_cb(lv_event_t *e)
     parse("G4 S1800"); // cool-down wait 30 min
 }
 
+void reflowTempChange(float temp)
+{
+    if (!lvgl_port_lock(0))
+        return;
+    int temp_int = (int)temp;
+    int temp_frac = (int)((temp - temp_int) * 1000);
+    lv_label_set_text_fmt(reflow_temp, "Temperature: %d.%03d °C", temp_int, temp_frac);
+
+    lvgl_port_unlock();
+}
+
 void show_print_finished_screen()
 {
     if (!lvgl_port_lock(0))
         return;
 
-    ESP_LOGI(TAG, "Creating print finished screen...");
+    ESP_LOGI(DISPLAYTAG, "Creating print finished screen...");
 
     // ====================================================
     // MEMORY MANAGEMENT: Clean old screen if it exists
@@ -67,12 +80,12 @@ void show_print_finished_screen()
     if (printFinishedScreen == NULL)
     {
         printFinishedScreen = lv_obj_create(NULL);
-        ESP_LOGI(TAG, "Created new screen object");
+        ESP_LOGI(DISPLAYTAG, "Created new screen object");
     }
     else
     {
         lv_obj_clean(printFinishedScreen);
-        ESP_LOGI(TAG, "Cleaned existing screen");
+        ESP_LOGI(DISPLAYTAG, "Cleaned existing screen");
     }
 
     lv_obj_set_style_text_font(printFinishedScreen, &lv_font_montserrat_14, 0);
@@ -119,9 +132,16 @@ void show_print_finished_screen()
     lv_obj_center(reflow_label);
     lv_obj_add_event_cb(reflow_btn, reflow_parts_cb, LV_EVENT_CLICKED, NULL);
 
-    ESP_LOGI(TAG, "Loading print finished screen...");
+    reflow_temp = lv_label_create(printFinishedScreen);
+    lv_obj_set_width(reflow_temp, 220);
+    lv_obj_set_style_text_align(reflow_temp, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text_fmt(reflow_temp, "Temperature: --- °C");
+    lv_obj_align(reflow_temp, LV_ALIGN_TOP_MID, 0, 190);
+    setTempCallback(reflowTempChange);
+
+    ESP_LOGI(DISPLAYTAG, "Loading print finished screen...");
     lv_scr_load(printFinishedScreen);
-    ESP_LOGI(TAG, "Print finished screen loaded successfully");
+    ESP_LOGI(DISPLAYTAG, "Print finished screen loaded successfully");
 
     lvgl_port_unlock();
 }
@@ -137,6 +157,7 @@ lv_obj_t *activePrintScreen = NULL;
 lv_obj_t *print_status_label = NULL;
 lv_obj_t *tool_head_label = NULL;
 lv_obj_t *layer_info_label = NULL;
+lv_obj_t *temp_info_label = NULL;
 
 // Callback for the STOP button
 static void stop_print_cb(lv_event_t *e)
@@ -153,14 +174,14 @@ static void stop_print_cb(lv_event_t *e)
     {
         lv_label_set_text(print_status_label, "Print STOPPED");
     }
-    ESP_LOGI(TAG, "Print Stopped by User");
+    ESP_LOGI(DISPLAYTAG, "Print Stopped by User");
 
     lvgl_port_unlock();
 }
 
 void onLineCountChanged(int readLines, int totalLines)
 {
-    //printf("Line Count Changed: %d / %d\n", readLines, totalLines);
+    // printf("Line Count Changed: %d / %d\n", readLines, totalLines);
 
     if ((readLines >= totalLines && totalLines > 0))
     {
@@ -188,6 +209,17 @@ void onToolHeadChanged(int headID)
     if (!lvgl_port_lock(0))
         return;
     lv_label_set_text_fmt(tool_head_label, "Current Tool Head: %d", headID);
+    lvgl_port_unlock();
+}
+
+void onTempChange(float temp)
+{
+    if (!lvgl_port_lock(0))
+        return;
+    int temp_int = (int)temp;
+    int temp_frac = (int)((temp - temp_int) * 1000);
+    lv_label_set_text_fmt(temp_info_label, "Temperature: %d.%03d °C", temp_int, temp_frac);
+
     lvgl_port_unlock();
 }
 
@@ -253,8 +285,16 @@ void show_active_print_screen(const char *filename)
     lv_obj_set_style_text_align(layer_info_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text_fmt(layer_info_label, "Current Step: ---");
     lv_obj_align(layer_info_label, LV_ALIGN_TOP_MID, 0, 160);
+
+    temp_info_label = lv_label_create(activePrintScreen);
+    lv_obj_set_width(temp_info_label, 220);
+    lv_obj_set_style_text_align(temp_info_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text_fmt(temp_info_label, "Temperature: --- °C");
+    lv_obj_align(temp_info_label, LV_ALIGN_TOP_MID, 0, 190);
+
     setLineCountCallback(onLineCountChanged);
     setHeadCallback(onToolHeadChanged);
+    setTempCallback(onTempChange);
 
     // ====================================================
     // 4. STOP BUTTON (Y: 230 - Anchored to bottom)
@@ -288,7 +328,7 @@ void sendToParse(char fileName[128])
 {
     if ((strstr(fileName, ".GCO")) != NULL)
     {
-        ESP_LOGI(TAG, "I AM SENDING TO THE QUEUE");
+        ESP_LOGI(DISPLAYTAG, "I AM SENDING TO THE QUEUE");
         xQueueSend(FileName, fileName, portMAX_DELAY);
         xSemaphoreGive(StartButtonSemaphore);
         show_active_print_screen(fileName);
@@ -296,7 +336,7 @@ void sendToParse(char fileName[128])
     else
     {
         // Add an else statement so you know EXACTLY why it failed in the logs
-        ESP_LOGE(TAG, "Queue skipped: '%s' is missing a valid G-code extension.", fileName);
+        ESP_LOGE(DISPLAYTAG, "Queue skipped: '%s' is missing a valid G-code extension.", fileName);
     }
 }
 
@@ -314,7 +354,7 @@ static void roller_event_cb(lv_event_t *e)
     lv_roller_get_selected_str(roller, selected_file, sizeof(selected_file));
 
     // Print to console
-    ESP_LOGI(TAG, "Selected file: %s", selected_file);
+    ESP_LOGI(DISPLAYTAG, "Selected file: %s", selected_file);
 
     lvgl_port_unlock();
 }
@@ -329,7 +369,7 @@ static void print_button_cb(lv_event_t *e)
     lv_roller_get_selected_str(gcode_roller_global, selected_file, sizeof(selected_file));
 
     // Print to console
-    ESP_LOGI(TAG, "Printing file: %s", selected_file);
+    ESP_LOGI(DISPLAYTAG, "Printing file: %s", selected_file);
     sendToParse(selected_file);
 
     lvgl_port_unlock();
@@ -342,7 +382,7 @@ static void refresh_sd_cb(lv_event_t *e)
         return;
     }
 
-    ESP_LOGI(TAG, "Refreshing SD card file list on display...");
+    ESP_LOGI(DISPLAYTAG, "Refreshing SD card file list on display...");
 
     deinitializeSD();
 
@@ -402,7 +442,7 @@ static void refresh_sd_cb(lv_event_t *e)
     }
     else
     {
-        ESP_LOGE(TAG, "Roller is NULL, cannot update!");
+        ESP_LOGE(DISPLAYTAG, "Roller is NULL, cannot update!");
     }
 
     lvgl_port_unlock();
@@ -522,13 +562,6 @@ void printDisplay(void)
 //                        TEST SCREEN
 //
 ///////////////////////////////////////////////////////////////////////////
-
-// static void checkHead(lv_event_t *e)
-// {
-//     lv_obj_t *headID = (lv_obj_t *)lv_event_get_user_data(e);
-//     lv_label_set_text_fmt(headID, "Current Head ID: %d", readHeadState());
-//     printf("LABEL SHOULD UPDATE\n");
-// }
 
 static void tstbtn_event_cb(lv_event_t *e)
 {
@@ -808,7 +841,7 @@ void display_update_status(const char *text)
 
 ///////////////////////////////////////////////////////////////////////////
 //
-//                          DISPLAY INITILIZATION
+//                          HOME SCREEN
 //
 ///////////////////////////////////////////////////////////////////////////
 
@@ -817,7 +850,7 @@ static void switch_to_test_screen(lv_event_t *e)
     if (!lvgl_port_lock(0))
         return;
 
-    ESP_LOGI(TAG, "Switching to test screen...");
+    ESP_LOGI(DISPLAYTAG, "Switching to test screen...");
     if (testScreen)
     {
         lv_scr_load(testScreen);
@@ -834,7 +867,7 @@ static void prntscr(lv_event_t *e)
     if (!lvgl_port_lock(0))
         return;
 
-    ESP_LOGI(TAG, "Switching to print screen...");
+    ESP_LOGI(DISPLAYTAG, "Switching to print screen...");
     if (printScreen)
     {
         lv_scr_load(printScreen);
@@ -846,22 +879,151 @@ static void prntscr(lv_event_t *e)
     lvgl_port_unlock();
 }
 
+void home_screen(void)
+{
+    if (!lvgl_port_lock(-1))
+        return;
+    lv_obj_t *scr = lv_obj_create(NULL);
+    g_main_screen = scr;
+
+    // Set a standard antialiased font. Removed subpx fonts as they look terrible when rotated.
+#if LV_FONT_MONTSERRAT_16
+    lv_obj_set_style_text_font(scr, &lv_font_montserrat_16, 0);
+#elif LV_FONT_MONTSERRAT_14
+    lv_obj_set_style_text_font(scr, &lv_font_montserrat_14, 0);
+#endif
+
+    // CHANGED: Set background to white and base text to black
+    lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
+    lv_obj_set_style_text_color(scr, lv_color_black(), 0);
+
+    // Status label
+    g_status_label = lv_label_create(scr);
+    lv_obj_set_width(g_status_label, LCD_H_RES - 20);
+    lv_obj_set_style_text_align(g_status_label, LV_TEXT_ALIGN_CENTER, 0);
+
+    // CHANGED: Status text color to black
+    lv_obj_set_style_text_color(g_status_label, lv_color_black(), 0);
+    lv_label_set_text(g_status_label, "Display initialized\nTouch the button to test");
+    lv_obj_align(g_status_label, LV_ALIGN_TOP_MID, 0, 10);
+
+    ///////////////////////////////////////////////////////////////////////////
+    //
+    //                          CREATEING UI ELEMENTS
+    //
+    ///////////////////////////////////////////////////////////////////////////
+
+    // Test button
+    lv_obj_t *tstbtn = lv_btn_create(scr);
+    lv_obj_set_size(tstbtn, 140, 50);
+    lv_obj_align(tstbtn, LV_ALIGN_CENTER, 0, -80);
+    lv_obj_t *tstbtnlabel = lv_label_create(tstbtn);
+    lv_label_set_text(tstbtnlabel, "TEST");
+
+    // CHANGED: Button text color to black
+    lv_obj_set_style_text_color(tstbtnlabel, lv_color_black(), 0);
+
+    // Create test screen
+    // test_screen();
+
+    // simple event handler: increment counter and update status
+    lv_obj_add_event_cb(tstbtn, switch_to_test_screen, LV_EVENT_CLICKED, NULL);
+
+    // PRINT FILES BUTTON
+    lv_obj_t *prntbtn = lv_btn_create(scr);
+    lv_obj_set_size(prntbtn, 140, 50);
+    lv_obj_align(prntbtn, LV_ALIGN_CENTER, 0, 80);
+    lv_obj_t *prntbtnlabel = lv_label_create(prntbtn);
+    lv_label_set_text(prntbtnlabel, "PRINT");
+
+    lv_obj_set_style_text_color(prntbtnlabel, lv_color_black(), 0);
+
+    // // Create print screen
+    // printDisplay();
+
+    lv_obj_add_event_cb(prntbtn, prntscr, LV_EVENT_CLICKED, NULL);
+
+    lvgl_port_unlock();
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
+//                          Loading screen
+//
+///////////////////////////////////////////////////////////////////////////
+
+void show_loading_screen(void)
+{
+    if (!lvgl_port_lock(-1))
+        return;
+
+    if (loadingScreen == NULL)
+    {
+        loadingScreen = lv_obj_create(NULL);
+    }
+    else
+    {
+        lv_obj_clean(loadingScreen);
+    }
+
+    lv_obj_set_style_bg_color(loadingScreen, lv_color_white(), 0);
+
+    // ====================================================
+    // 1. PROJECT NAME
+    // ====================================================
+    lv_obj_t *project_name_label = lv_label_create(loadingScreen);
+    lv_label_set_text(project_name_label, "CONDUCTIVE INK PRINTER");
+
+lv_obj_set_style_text_font(project_name_label, &lv_font_montserrat_16, 0);
+    // FIX: Set both width AND height, then refresh
+    lv_obj_set_width(project_name_label, 220);
+    lv_obj_set_height(project_name_label, LV_SIZE_CONTENT);
+    lv_label_set_long_mode(project_name_label, LV_LABEL_LONG_WRAP);
+    lv_obj_refr_size(project_name_label); // Force size recalculation
+
+    lv_obj_set_style_text_color(project_name_label, lv_color_black(), 0);
+    lv_obj_align(project_name_label, LV_ALIGN_CENTER, 0, -50);
+
+    // ====================================================
+    // 2. LOADING SPINNER
+    // ====================================================
+    lv_obj_t *spinner = lv_spinner_create(loadingScreen, 1000, 60);
+    lv_obj_set_size(spinner, 40, 40);
+    lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 10);
+
+    lv_obj_set_style_arc_color(spinner, lv_palette_lighten(LV_PALETTE_GREY, 2), LV_PART_MAIN);
+    lv_obj_set_style_arc_color(spinner, lv_palette_main(LV_PALETTE_BLUE), LV_PART_INDICATOR);
+
+    // ====================================================
+    // 3. CREDITS
+    // ====================================================
+    lv_obj_t *credits_label = lv_label_create(loadingScreen);
+    lv_label_set_text(credits_label, "Firmware v1.0.0 | Created by GROUP 7");
+    lv_obj_set_style_text_font(credits_label, &lv_font_montserrat_14, 0);
+
+    // FIX: Set both width AND height, then refresh
+    lv_obj_set_width(credits_label, 220);
+    lv_obj_set_height(credits_label, LV_SIZE_CONTENT);
+    lv_label_set_long_mode(credits_label, LV_LABEL_LONG_WRAP);
+    lv_obj_refr_size(credits_label); // Force size recalculation
+
+    lv_obj_set_style_text_color(credits_label, lv_color_black(), 0);
+    lv_obj_align(credits_label, LV_ALIGN_BOTTOM_MID, 0, -15);
+
+    lv_scr_load(loadingScreen);
+    lvgl_port_unlock();
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
+//                          Display Initliazation
+//
+///////////////////////////////////////////////////////////////////////////
+
 void display_init(void)
 {
-    ESP_LOGI(TAG, "Initializing display...");
+    ESP_LOGI(DISPLAYTAG, "Initializing display...");
 
-    // SPI bus for LCD and touch
-    const spi_bus_config_t buscfg = {
-        .sclk_io_num = SCK,
-        .mosi_io_num = MOSI,
-        .miso_io_num = MISO,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-        .max_transfer_sz = LCD_H_RES * DRAW_BUFF_HEIGHT * sizeof(uint16_t),
-    };
-    ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
-
-    // Install panel IO (SPI)
     const esp_lcd_panel_io_spi_config_t io_config = ILI9341_PANEL_IO_SPI_CONFIG(csDisplay, dcDisplay, NULL, NULL);
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)SPI3_HOST, &io_config, &lcd_io));
 
@@ -932,7 +1094,7 @@ void display_init(void)
     g_lv_disp = lvgl_port_add_disp(&disp_cfg);
     if (!g_lv_disp)
     {
-        ESP_LOGE(TAG, "Failed to add LVGL display");
+        ESP_LOGE(DISPLAYTAG, "Failed to add LVGL display");
         return;
     }
 
@@ -944,92 +1106,55 @@ void display_init(void)
     g_lv_touch_indev = lvgl_port_add_touch(&touch_cfg);
     if (!g_lv_touch_indev)
     {
-        ESP_LOGE(TAG, "Failed to add LVGL touch input");
+        ESP_LOGE(DISPLAYTAG, "Failed to add LVGL touch input");
         return;
     }
+    ESP_LOGI(DISPLAYTAG, "Display initialized successfully");
 
-    // Build a simple UI
-    lvgl_port_lock(0);
-    lv_obj_t *scr = lv_scr_act();
-    g_main_screen = scr;
-
-    // Set a standard antialiased font. Removed subpx fonts as they look terrible when rotated.
-#if LV_FONT_MONTSERRAT_16
-    lv_obj_set_style_text_font(scr, &lv_font_montserrat_16, 0);
-#elif LV_FONT_MONTSERRAT_14
-    lv_obj_set_style_text_font(scr, &lv_font_montserrat_14, 0);
-#endif
-
-    // CHANGED: Set background to white and base text to black
-    lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
-    lv_obj_set_style_text_color(scr, lv_color_black(), 0);
-
-    // Status label
-    g_status_label = lv_label_create(scr);
-    lv_obj_set_width(g_status_label, LCD_H_RES - 20);
-    lv_obj_set_style_text_align(g_status_label, LV_TEXT_ALIGN_CENTER, 0);
-
-    // CHANGED: Status text color to black
-    lv_obj_set_style_text_color(g_status_label, lv_color_black(), 0);
-    lv_label_set_text(g_status_label, "Display initialized\nTouch the button to test");
-    lv_obj_align(g_status_label, LV_ALIGN_TOP_MID, 0, 10);
-
-    ///////////////////////////////////////////////////////////////////////////
-    //
-    //                          CREATEING UI ELEMENTS
-    //
-    ///////////////////////////////////////////////////////////////////////////
-
-    // Test button
-    lv_obj_t *tstbtn = lv_btn_create(scr);
-    lv_obj_set_size(tstbtn, 140, 50);
-    lv_obj_align(tstbtn, LV_ALIGN_CENTER, 0, -80);
-    lv_obj_t *tstbtnlabel = lv_label_create(tstbtn);
-    lv_label_set_text(tstbtnlabel, "TEST");
-
-    // CHANGED: Button text color to black
-    lv_obj_set_style_text_color(tstbtnlabel, lv_color_black(), 0);
-
-    // Create test screen
-    test_screen();
-
-    // simple event handler: increment counter and update status
-    lv_obj_add_event_cb(tstbtn, switch_to_test_screen, LV_EVENT_CLICKED, NULL);
-
-    // PRINT FILES BUTTON
-    lv_obj_t *prntbtn = lv_btn_create(scr);
-    lv_obj_set_size(prntbtn, 140, 50);
-    lv_obj_align(prntbtn, LV_ALIGN_CENTER, 0, 80);
-    lv_obj_t *prntbtnlabel = lv_label_create(prntbtn);
-    lv_label_set_text(prntbtnlabel, "PRINT");
-
-    lv_obj_set_style_text_color(prntbtnlabel, lv_color_black(), 0);
-
-    // Create print screen
-    printDisplay();
-
-    lv_obj_add_event_cb(prntbtn, prntscr, LV_EVENT_CLICKED, NULL);
-
-    lvgl_port_unlock();
-
-    ESP_LOGI(TAG, "Display initialized successfully");
-
-    ESP_LOGI(TAG, "Touch handle after init: %p", touch_handle);
+    ESP_LOGI(DISPLAYTAG, "Touch handle after init: %p", touch_handle);
     if (!touch_handle)
     {
-        ESP_LOGE(TAG, "Touch controller failed to initialize!");
+        ESP_LOGE(DISPLAYTAG, "Touch controller failed to initialize!");
     }
     else
     {
-        ESP_LOGI(TAG, "Touch controller initialized successfully");
+        ESP_LOGI(DISPLAYTAG, "Touch controller initialized successfully");
     }
 }
 
 void display_task(void *pvParameters)
 {
+
+    display_init();
+
+    // 2. Add a tiny delay to ensure the LVGL timer task has synchronized
+    // with the touch controller hardware
+    vTaskDelay(pdMS_TO_TICKS(500));
+
+    // 1. Initial boot: show loading screen
+    show_loading_screen();
+
+    // 2. Build ALL screens in memory now so they are ready for transitions
+    // Note: Since you use lv_obj_create(NULL), these are just background
+    // containers and won't overlap until you call lv_scr_load().
+    home_screen();  // Builds g_main_screen
+    test_screen();  // Builds testScreen
+    printDisplay(); // Builds printScreen
+
+    // 3. Optional: Move back to home screen after initialization
+    // (If you don't do this, you might be left on the last screen you built)
+    if (!lvgl_port_lock(-1))
+        return;
+    lv_scr_load(loadingScreen);
+    lvgl_port_unlock();
+    vTaskDelay(pdMS_TO_TICKS(7000)); // Show loading screen for 2 seconds
+    if (!lvgl_port_lock(-1))
+        return;
+    lv_scr_load(g_main_screen);
+    lvgl_port_unlock();
+    // 4. Stay alive
     while (1)
     {
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
-    vTaskDelete(NULL);
 }

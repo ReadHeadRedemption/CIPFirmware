@@ -32,6 +32,13 @@ void setHeadCallback(HeadChangeCallback callback)
 }
 int current_head_id = 3;
 
+void parsetoolparam(int tool)
+{
+    // cond3 sp cam
+float toolscale[] = {0.0001f, 0.00005, 0.0f};
+    eScale = toolscale[tool];
+}
+
 void readParseFile(char *fileLocation)
 {
     parseSemaphore = xSemaphoreCreateMutex();
@@ -47,12 +54,12 @@ void readParseFile(char *fileLocation)
     else
     {
         ESP_LOGI(TAG, "Successfully opened G-code file: %s", fileLocation);
-        if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
-        {
-            gpio_set_level(zEnable, 0);
-            gpio_set_level(eEnable, 0);
-            xSemaphoreGive(i2c_mutex);
-        }
+        // if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+        // {
+        //     gpio_set_level(zEnable, 0);
+        //     gpio_set_level(eEnable, 0);
+        //     xSemaphoreGive(i2c_mutex);
+        // }
 #ifdef DEBUG_PURGE
         char up[] = "G0 Z5.5";
 
@@ -101,9 +108,14 @@ void parse(char *line)
     bool pullback = true;
     char *p;
     char cmd[8] = "";
-    float cords[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-
+    float cords[4] = {head.target_x, head.target_y, head.target_z, head.moveE};
     bool coordChange[3] = {false, false, false};
+
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+                {
+                    gpio_set_level(zEnable, 0);
+                    xSemaphoreGive(i2c_mutex);
+                }
     // First parse the command
     /*
     Command Types
@@ -228,6 +240,11 @@ void parse(char *line)
                 {
                     sscanf(p + 1, "%f", &extrude);
                     head.moveE += extrude * scale * eScale;
+                    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+                {
+                    gpio_set_level(eEnable, 0);
+                    xSemaphoreGive(i2c_mutex);
+                }
                 }
                 else
                 {
@@ -243,6 +260,11 @@ void parse(char *line)
                                           (dE[2] * dE[2]));
 
                     head.moveE += extrude * scale * eScale;
+                    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+                {
+                    gpio_set_level(eEnable, 0);
+                    xSemaphoreGive(i2c_mutex);
+                }
                 }
                 head.feed_rate_hz = 200;
                 coordinated_move(&head);
@@ -513,11 +535,7 @@ void parse(char *line)
     }
     else if (cmd[0] == 'T') // tool change commands
     {
-        head.target_x = 0;
-        head.target_y = 0;
-        head.target_z = 100 * scale;
-        coordinated_move(&head);
-
+        parse("G0 X0 Y0 Z100");
         // Disable extruder to swap toolhead
         if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
         {
@@ -540,7 +558,8 @@ void parse(char *line)
         {
             char *toolIndex[] = {"Conductive Ink", "Insulator Ink", "Camera", NULL};
             ESP_LOGI(TAG, "CALLING T: TOOL CHANGE TO %s", toolIndex[tool]);
-            // changeTool(tool);
+            kfact(tool);
+            parsetoolparam(tool);
 
             // 2. Fixed IO Check Loop
             if (io_expander == NULL)

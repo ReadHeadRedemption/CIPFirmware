@@ -178,10 +178,11 @@ static esp_err_t rmt_step_burst(motor_id_t motor_id, uint32_t freq, uint32_t cou
 
 float K_FACTOR = 0.04f;
 
-esp_err_t changeTool(int tool)
+esp_err_t kfact(int tool)
 {
     // Condutive Ink, Solder Paste Ink, Camera
-    float toolKval[3] = {0.02f, 0.01f, 0.0f};
+    float toolKval[3] = {0.04f, 0.01f, 0.0f};
+
     K_FACTOR = toolKval[tool];
     return ESP_OK;
 }
@@ -628,44 +629,44 @@ esp_err_t homeMotors()
     motors[MOTOR_Z].position = 999.0f;
 
     // 1. CRITICAL: Initialize the homer struct to match the current fake positions
-    MoveCmd_t homer = {0};
-    homer.target_x = motors[MOTOR_X].position;
-    homer.target_y = motors[MOTOR_Y].position;
-    homer.target_z = motors[MOTOR_Z].position;
+    head.target_x = motors[MOTOR_X].position;
+    head.target_y = motors[MOTOR_Y].position;
+    head.target_z = motors[MOTOR_Z].position;
 
     // Move off of limit switch if on
     ESP_LOGI(TAG, "Starting coordinated homing...");
-    homer.target_x += 3.0f;
-    homer.target_y += 3.0f;
-    homer.target_z += 3.0f;
-    homer.feed_rate_hz = 5000;
-    coordinated_move(&homer);
+    head.target_x += 3.0f;
+    head.target_y += 3.0f;
+    head.target_z += 3.0f;
+    head.feed_rate_hz = 5000;
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(motors[MOTOR_X].enable_pin, 0);
+        gpio_set_level(motors[MOTOR_Y].enable_pin, 0);
+        gpio_set_level(motors[MOTOR_Z].enable_pin, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
+    coordinated_move(&head);
 
     // Prepare for homing moves
-    homer.feed_rate_hz = 5000;
 
     // ----------------------------------------------------------------
     // HOME X AXIS
     // ----------------------------------------------------------------
     // Flush any stale switch triggers before starting the loop
     xSemaphoreTake(xSwitchSemaphore, 0);
-    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
-    {
-        gpio_set_level(motors[MOTOR_X].enable_pin, 0);
-        xSemaphoreGive(i2c_mutex);
-    }
     while (!axis_homed[MOTOR_X])
     {
-        homer.target_x -= 1.0f;
+        head.target_x -= 1.0f;
 
         // 2. CRITICAL: Actually command the motor to move!
-        coordinated_move(&homer);
+        coordinated_move(&head);
 
         // Check if the switch triggered during that 1mm move
         if (xSemaphoreTake(xSwitchSemaphore, 0) == pdTRUE)
         {
             motors[MOTOR_X].position = 0.0f;
-            homer.target_x = 0.0f; // Reset target so Y/Z moves don't go crazy
+            head.target_x = 0.0f; // Reset target so Y/Z moves don't go crazy
             axis_homed[MOTOR_X] = true;
             if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
             {
@@ -680,21 +681,16 @@ esp_err_t homeMotors()
     // HOME Y AXIS
     // ----------------------------------------------------------------
     xSemaphoreTake(ySwitchSemaphore, 0);
-    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
-    {
-        gpio_set_level(motors[MOTOR_Y].enable_pin, 0);
-        xSemaphoreGive(i2c_mutex);
-    }
     while (!axis_homed[MOTOR_Y])
     {
-        homer.target_y -= 1.0f;
+        head.target_y -= 1.0f;
 
-        coordinated_move(&homer); // Command the move
+        coordinated_move(&head); // Command the move
 
         if (xSemaphoreTake(ySwitchSemaphore, 0) == pdTRUE)
         {
             motors[MOTOR_Y].position = 0.0f;
-            homer.target_y = 0.0f;
+            head.target_y = 0.0f;
             if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
             {
                 gpio_set_level(motors[MOTOR_Y].enable_pin, 1);
@@ -709,21 +705,16 @@ esp_err_t homeMotors()
     // HOME Z AXIS
     // ----------------------------------------------------------------
     xSemaphoreTake(zSwitchSemaphore, 0);
-    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
-    {
-        gpio_set_level(motors[MOTOR_Z].enable_pin, 0);
-        xSemaphoreGive(i2c_mutex);
-    }
     while (!axis_homed[MOTOR_Z])
     {
-        homer.target_z -= 1.0f;
+        head.target_z -= 1.0f;
 
-        coordinated_move(&homer); // Command the move
+        coordinated_move(&head); // Command the move
 
         if (xSemaphoreTake(zSwitchSemaphore, 0) == pdTRUE)
         {
             motors[MOTOR_Z].position = 0.0f;
-            homer.target_z = 0.0f;
+            head.target_z = 0.0f;
             axis_homed[MOTOR_Z] = true;
             if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
             {
@@ -736,16 +727,29 @@ esp_err_t homeMotors()
 
     // Move to offset position
 
-    homer.target_z = 30.0f;
-    coordinated_move(&homer);
-    homer.target_x = 33.0f;
-    homer.target_y = 239.0f;
-    coordinated_move(&homer);
+    head.target_z = 30.0f;
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(motors[MOTOR_Z].enable_pin, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
+    coordinated_move(&head);
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(motors[MOTOR_X].enable_pin, 0);
+        gpio_set_level(motors[MOTOR_Y].enable_pin, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
+    head.target_x = 29.0f;
+    head.target_y = 242.0f;
+    coordinated_move(&head);
 
     // // Set actual home
     motors[MOTOR_X].position = 0.0f;
     motors[MOTOR_Y].position = 200.0f;
     // motors[MOTOR_Z].position = 25.0f;
+    head.target_x = 0.0f;
+    head.target_y = 200.0f;
 
     // initalize extruder at position 0
     motors[MOTOR_E].position = 0;
@@ -753,7 +757,13 @@ esp_err_t homeMotors()
     // Reset step counters after homing to establish new reference frame
     // for (int i = 0; i < NUM_MOTORS; i++)
     //     motors[i].targetStep = 0;
-
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(motors[MOTOR_X].enable_pin, 1);
+        gpio_set_level(motors[MOTOR_Y].enable_pin, 1);
+        gpio_set_level(motors[MOTOR_Z].enable_pin, 1);
+        xSemaphoreGive(i2c_mutex);
+    }
     ESP_LOGI(TAG, "Homed");
     return ESP_OK;
 }

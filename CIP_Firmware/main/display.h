@@ -11,6 +11,7 @@
 
 #include "stepperMotor.h"
 #include "GCodeParser.h"
+#include "heater.h"
 
 extern MoveCmd_t head;
 

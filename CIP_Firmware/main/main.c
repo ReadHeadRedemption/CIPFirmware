@@ -1,7 +1,7 @@
 #include "main.h"
 #include "IOExpander.h"
 
-static const char *TAG = "MAIN";
+static const char *MAINTAG = "MAIN";
 
 /*
 List of Tasks
@@ -50,14 +50,14 @@ void parserTask(void *pvParameters)
         recieveFlag = xQueueReceive(FileName, &fileString, 1); // recieve values from the queue
         if (recieveFlag == pdPASS)
         {
-            ESP_LOGI(TAG, "I HAVE READ FROM THE QUEUE");
+            ESP_LOGI(MAINTAG, "I HAVE READ FROM THE QUEUE");
             if (xSemaphoreTake(StartButtonSemaphore, portMAX_DELAY) == pdTRUE)
             {
 
-                ESP_LOGI(TAG, "Starting G-code parser task...");
+                ESP_LOGI(MAINTAG, "Starting G-code parser task...");
                 char filepath[256];
                 snprintf(filepath, sizeof(filepath), "/sdcard/%s", fileString);
-                ESP_LOGI(TAG, "FILE LOCATION: %s", filepath);
+                ESP_LOGI(MAINTAG, "FILE LOCATION: %s", filepath);
                 readParseFile(filepath);
             }
         }
@@ -66,9 +66,9 @@ void parserTask(void *pvParameters)
     // {
     //     if (xSemaphoreTake(StartButtonSemaphore, portMAX_DELAY) == pdTRUE)
     //     {
-    //         ESP_LOGI(TAG, "Starting G-code parser task...");
+    //         ESP_LOGI(MAINTAG, "Starting G-code parser task...");
     //         readParseFile(spiffs_file);
-    //         ESP_LOGI(TAG, "G-code parsing completed");
+    //         ESP_LOGI(MAINTAG, "G-code parsing completed");
     //     }
     // }
     vTaskDelete(NULL);
@@ -77,7 +77,7 @@ void parserTask(void *pvParameters)
 static void checkSwitches(void *pvParameters)
 {
     int levels[4] = {0};
-    ESP_LOGI(TAG, "STARTING LIMIT SWITCH TASK");
+    ESP_LOGI(MAINTAG, "STARTING LIMIT SWITCH TASK");
     while (1)
     {
         if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
@@ -86,7 +86,7 @@ static void checkSwitches(void *pvParameters)
             levels[1] = gpio_get_level(ySwitch);
             levels[2] = gpio_get_level(zSwitch);
             levels[3] = gpio_get_level(eSwitch);
-            // ESP_LOGI(TAG, "SWITCH LEVELS READ: %d, %d, %d, %d", levels[0], levels[1], levels[2], levels[3]);
+            // ESP_LOGI(MAINTAG, "SWITCH LEVELS READ: %d, %d, %d, %d", levels[0], levels[1], levels[2], levels[3]);
             xSemaphoreGive(i2c_mutex);
         }
         if (levels[0] == 1)
@@ -134,7 +134,7 @@ static void console_task(void *arg)
         }
         else if (strcmp(line, "test") == 0)
         {
-            ESP_LOGI(TAG, "Test command received");
+            ESP_LOGI(MAINTAG, "Test command received");
             printf("\n");
         }
         // Process line
@@ -152,7 +152,7 @@ static void console_task(void *arg)
         {
             vTaskSuspend(parserHandle);
             parse("G1 E-600");
-            ESP_LOGI(TAG, "STOPPING");
+            ESP_LOGI(MAINTAG, "STOPPING");
             printf("\n");
         }
         else if (strcmp(line, "head?") == 0)
@@ -179,11 +179,14 @@ static void console_task(void *arg)
 
 static void blinker(void *pvParameters)
 {
+    gpio_set_direction(LED1, GPIO_MODE_OUTPUT);
     int level = 0;
     while (1)
     {
         gpio_set_level(LED1, !level);
+        level = !level;
         vTaskDelay(pdMS_TO_TICKS(500));
+        
     }
 }
 
@@ -196,7 +199,7 @@ void moveMotor(void *pvParameters)
 {
     if (xSemaphoreTake(TestButtonSemaphore, portMAX_DELAY) == pdTRUE)
     {
-        ESP_LOGI(TAG, "Starting motor test task...");
+        ESP_LOGI(MAINTAG, "Starting motor test task...");
         homeMotors();
         MoveCmd_t moveTo;
         moveTo.target_x = 0.0f;
@@ -207,16 +210,16 @@ void moveMotor(void *pvParameters)
         {
             if (xSemaphoreTake(TestButtonSemaphore, portMAX_DELAY) == pdTRUE)
             {
-                ESP_LOGI(TAG, "Test button pressed, incrementing motor");
+                ESP_LOGI(MAINTAG, "Test button pressed, incrementing motor");
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 moveTo.target_x += 20.0f;
                 moveTo.target_y += 20.0f;
                 moveTo.target_z += 20.0f;
 
-                ESP_LOGI(TAG, "moving motor to X: %.3f Y: %.3f Z: %.3f", moveTo.target_x, moveTo.target_y, moveTo.target_z);
+                ESP_LOGI(MAINTAG, "moving motor to X: %.3f Y: %.3f Z: %.3f", moveTo.target_x, moveTo.target_y, moveTo.target_z);
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 coordinated_move(&moveTo);
-                ESP_LOGI(TAG, "Finished Moving");
+                ESP_LOGI(MAINTAG, "Finished Moving");
                 // Reset test button semaphore for next test
             }
         }
@@ -231,7 +234,7 @@ void moveMotor(void *pvParameters)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "CIP Firmware starting...");
+    ESP_LOGI(MAINTAG, "CIP Firmware starting...");
     gpio_set_direction(xStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(yStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(zStep, GPIO_MODE_OUTPUT);
@@ -270,35 +273,57 @@ void app_main(void)
     // esp_err_t ret = esp_vfs_spiffs_register(&conf);
     // if (ret != ESP_OK)
     // {
-    //     ESP_LOGE(TAG, "Failed to mount SPIFFS");
+    //     ESP_LOGE(MAINTAG, "Failed to mount SPIFFS");
     //     return;
     // }
-    // ESP_LOGI(TAG, "SPIFFS mounted successfully");
+    // ESP_LOGI(MAINTAG, "SPIFFS mounted successfully");
+
+     // SPI bus for LCD and touch
+    const spi_bus_config_t buscfg = {
+        .sclk_io_num = SCK,
+        .mosi_io_num = MOSI,
+        .miso_io_num = MISO,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
+        .max_transfer_sz = 240 * 8 * sizeof(uint16_t),
+    };
+    ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
     vTaskDelay(pdMS_TO_TICKS(100));
     if (init_io_expander() != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to initialize IO Expander!");
+        ESP_LOGE(MAINTAG, "Failed to initialize IO Expander!");
         return;
     }
 
     if (stepper_motor_init() != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to initialize stepper motors!");
+        ESP_LOGE(MAINTAG, "Failed to initialize stepper motors!");
         return;
     }
 
     if (sdmmc_host_init() != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to initialize SDMMC host!");
+        ESP_LOGE(MAINTAG, "Failed to initialize SDMMC host!");
         return;
     }
 
     if (initializeSD() != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to initialize SD card!");
+        ESP_LOGE(MAINTAG, "Failed to initialize SD card!");
         // return;
     }
+
+    //display_init();
+
+
+    if (heater_init() != ESP_OK)
+    {
+        ESP_LOGE(MAINTAG, "Failed to initialize heater!");
+        // return;
+    }
+        
+
 
     // Creating button semaphores
     StartButtonSemaphore = xSemaphoreCreateBinary();
@@ -330,11 +355,11 @@ void app_main(void)
     ///////////////////////////////////////////////////////////////////////////////
 
     // Setting Pin Directions
-    ESP_LOGI(TAG, "Configuring GPIO pins...");
-    ESP_LOGI(TAG, "Configuring Output pins...");
+    ESP_LOGI(MAINTAG, "Configuring GPIO pins...");
+    ESP_LOGI(MAINTAG, "Configuring Output pins...");
     // Configure stepper direction pins as outputs
 
-    ESP_LOGI(TAG, "Configuring Input pins...");
+    ESP_LOGI(MAINTAG, "Configuring Input pins...");
     // gpio_config_t inputPins = {
     //     .pin_bit_mask = (1ULL << xSwitch) | (1ULL << ySwitch) |
     //                     (1ULL << zSwitch),
@@ -361,7 +386,7 @@ void app_main(void)
     const int uart_buffer_size = (1024 * 2);
     uart_driver_install(UART_NUM_1, uart_buffer_size, uart_buffer_size, 10, &uart_queue, 0);
 
-    ESP_LOGI(TAG, "GPIO pins configured successfully");
+    ESP_LOGI(MAINTAG, "GPIO pins configured successfully");
 
     // ESP_ERROR_CHECK(gpio_config(&outputPins));
 
@@ -372,11 +397,8 @@ void app_main(void)
     /////////////////////////////////////////////////////////////////////////
     // Initialize stepper motors
 
-    // xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 3, NULL, 1);
 
-    display_init();
-
-    heater_init();
+    
 
     // Test Tasks
     xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 5, NULL);
@@ -385,10 +407,12 @@ void app_main(void)
     xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     //  Create heater control task
-    // xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
+    xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
     //   Create G-code parser task
     xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, &parserHandle);
+        xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 2, NULL, 1);
+
     xTaskCreate(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL);
     xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
-    ESP_LOGI(TAG, "All tasks created successfully");
+    ESP_LOGI(MAINTAG, "All tasks created successfully");
 }
