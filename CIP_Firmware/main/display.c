@@ -1143,11 +1143,11 @@ void display_task(void *pvParameters)
 
     // 3. Optional: Move back to home screen after initialization
     // (If you don't do this, you might be left on the last screen you built)
-    if (!lvgl_port_lock(-1))
-        return;
-    lv_scr_load(loadingScreen);
-    lvgl_port_unlock();
-    vTaskDelay(pdMS_TO_TICKS(7000)); // Show loading screen for 2 seconds
+    // if (!lvgl_port_lock(-1))
+    //     return;
+    // lv_scr_load(loadingScreen);
+    // lvgl_port_unlock();
+    // vTaskDelay(pdMS_TO_TICKS(7000)); // Show loading screen for 2 seconds
     if (!lvgl_port_lock(-1))
         return;
     lv_scr_load(g_main_screen);
