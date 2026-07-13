@@ -182,8 +182,8 @@ esp_err_t kfact(int tool)
 {
     // Condutive Ink, Solder Paste Ink, Camera
     float toolKval[3] = {0.04f, 0.01f, 0.0f};
-
     K_FACTOR = toolKval[tool];
+    printf("K_FACTOR set to %.3f for tool %d\n", K_FACTOR, tool);
     return ESP_OK;
 }
 
@@ -217,10 +217,10 @@ esp_err_t coordinated_move(MoveCmd_t *move)
     // 2. Set Directions for X, Y, Z
     stepper_set_direction(MOTOR_X, (dx >= 0) ? 0 : 1);
     stepper_set_direction(MOTOR_Y, (dy >= 0) ? 0 : 1);
-    stepper_set_direction(MOTOR_Z, (dz >= 0) ? 0 : 1);
+    stepper_set_direction(MOTOR_Z, (dz >= 0) ? 1 : 0);
 
-    uint8_t e_forward_dir = (de >= 0) ? 0 : 1;
-    uint8_t e_reverse_dir = (de >= 0) ? 1 : 0;
+    uint8_t e_forward_dir = (de >= 0) ? 1 : 0;
+    uint8_t e_reverse_dir = (de >= 0) ? 0 : 1;
 
     esp_rom_delay_us(5);
 
@@ -686,7 +686,6 @@ esp_err_t homeMotors()
         head.target_y -= 1.0f;
 
         coordinated_move(&head); // Command the move
-
         if (xSemaphoreTake(ySwitchSemaphore, 0) == pdTRUE)
         {
             motors[MOTOR_Y].position = 0.0f;
@@ -727,7 +726,7 @@ esp_err_t homeMotors()
 
     // Move to offset position
 
-    head.target_z = 30.0f;
+    head.target_z = 60.0f;
     if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
     {
         gpio_set_level(motors[MOTOR_Z].enable_pin, 0);

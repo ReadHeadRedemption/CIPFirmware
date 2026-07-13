@@ -35,8 +35,9 @@ int current_head_id = 3;
 void parsetoolparam(int tool)
 {
     // cond3 sp cam
-float toolscale[] = {0.0001f, 0.00005, 0.0f};
+    float toolscale[] = {0.00015f, 0.00005, 0.0f};
     eScale = toolscale[tool];
+    printf("Tool %d selected, eScale set to %.8f\n", tool, eScale);
 }
 
 void readParseFile(char *fileLocation)
@@ -90,17 +91,21 @@ void readParseFile(char *fileLocation)
 
         while (fgets(line, sizeof(line), file))
         {
-            parse(line);
-            // vTaskDelay(pdMS_TO_TICKS(5000));
-            readLines++;
-            if (lineCountCb != NULL)
+            if (xSemaphoreTake(parseSemaphore, portMAX_DELAY) == pdTRUE)
             {
-                lineCountCb(readLines, totalLines); // Notify display immediately
+                parse(line);
+                // vTaskDelay(pdMS_TO_TICKS(5000));
+                readLines++;
+                if (lineCountCb != NULL)
+                {
+                    lineCountCb(readLines, totalLines); // Notify display immediately
+                }
+                xSemaphoreGive(parseSemaphore);
             }
         }
-        fclose(file);
-        ESP_LOGI(TAG, "FINISH READING FILE");
     }
+    fclose(file);
+    ESP_LOGI(TAG, "FINISH READING FILE");
 }
 
 void parse(char *line)
@@ -112,10 +117,10 @@ void parse(char *line)
     bool coordChange[3] = {false, false, false};
 
     if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
-                {
-                    gpio_set_level(zEnable, 0);
-                    xSemaphoreGive(i2c_mutex);
-                }
+    {
+        gpio_set_level(zEnable, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
     // First parse the command
     /*
     Command Types
@@ -241,10 +246,10 @@ void parse(char *line)
                     sscanf(p + 1, "%f", &extrude);
                     head.moveE += extrude * scale * eScale;
                     if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
-                {
-                    gpio_set_level(eEnable, 0);
-                    xSemaphoreGive(i2c_mutex);
-                }
+                    {
+                        gpio_set_level(eEnable, 0);
+                        xSemaphoreGive(i2c_mutex);
+                    }
                 }
                 else
                 {
@@ -261,10 +266,10 @@ void parse(char *line)
 
                     head.moveE += extrude * scale * eScale;
                     if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
-                {
-                    gpio_set_level(eEnable, 0);
-                    xSemaphoreGive(i2c_mutex);
-                }
+                    {
+                        gpio_set_level(eEnable, 0);
+                        xSemaphoreGive(i2c_mutex);
+                    }
                 }
                 head.feed_rate_hz = 200;
                 coordinated_move(&head);

@@ -48,10 +48,10 @@ static void reflow_parts_cb(lv_event_t *e)
     printf("Reflowing parts...\n");
     parse("G1 E-400 F200"); // large pull out to stop ink extrusion
     parse("G0 X0 Y-20 Z150");
-    parse("M190 S90");
-    parse("G4 P300"); // Sleep for a while, seconds
-    parse("M190 S170");
-    parse("G4 P900"); // Sleep for a while, seconds
+    parse("M190 S140");
+    parse("G4 P45"); // Sleep for a while, seconds
+    parse("M190 S190");
+    parse("G4 P30"); // Sleep for a while, seconds
     parse("M190 S0");
     parse("G4 S1800"); // cool-down wait 30 min
 }
@@ -576,7 +576,7 @@ static void purge_event_cb(lv_event_t *e)
     if (!lvgl_port_lock(0))
         return;
 
-    parse("G0 Z5.5");
+    parse("G0 Z60 F5000");
     parse("G1 E40 F200");
     for (int i = 0; i < 10; i++)
     {
@@ -606,7 +606,17 @@ static void xPos_event_cb(lv_event_t *e)
     char buf[64];
     snprintf(buf, sizeof(buf), "MOVE +10 X");
     head.target_x += 10.0f;
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(xEnable, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
     coordinated_move(&head);
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(xEnable, 1);
+        xSemaphoreGive(i2c_mutex);
+    }
     lv_label_set_text(g_status_label, buf);
     lvgl_port_unlock();
 }
@@ -617,8 +627,18 @@ static void xNeg_event_cb(lv_event_t *e)
         return;
     char buf[64];
     snprintf(buf, sizeof(buf), "MOVE -10 X");
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(xEnable, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
     head.target_x -= 10.0f;
     coordinated_move(&head);
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(xEnable, 1);
+        xSemaphoreGive(i2c_mutex);
+    }
     lv_label_set_text(g_status_label, buf);
     lvgl_port_unlock();
 }
@@ -630,7 +650,17 @@ static void yPos_event_cb(lv_event_t *e)
     char buf[64];
     snprintf(buf, sizeof(buf), "MOVE +10 Y");
     head.target_y += 10.0f;
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(yEnable, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
     coordinated_move(&head);
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(yEnable, 1);
+        xSemaphoreGive(i2c_mutex);
+    }
     lv_label_set_text(g_status_label, buf);
     lvgl_port_unlock();
 }
@@ -642,7 +672,17 @@ static void yNeg_event_cb(lv_event_t *e)
     char buf[64];
     snprintf(buf, sizeof(buf), "MOVE -10 Y");
     head.target_y -= 10.0f;
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(yEnable, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
     coordinated_move(&head);
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(yEnable, 1);
+        xSemaphoreGive(i2c_mutex);
+    }
     lv_label_set_text(g_status_label, buf);
     lvgl_port_unlock();
 }
@@ -653,8 +693,18 @@ static void zPos_event_cb(lv_event_t *e)
         return;
     char buf[64];
     snprintf(buf, sizeof(buf), "MOVE +10 Z");
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(zEnable, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
     head.target_z += 10.0f;
     coordinated_move(&head);
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(zEnable, 1);
+        xSemaphoreGive(i2c_mutex);
+    }
     lv_label_set_text(g_status_label, buf);
     lvgl_port_unlock();
 }
@@ -665,7 +715,17 @@ static void zNeg_event_cb(lv_event_t *e)
         return;
     char buf[64];
     snprintf(buf, sizeof(buf), "MOVE -10 Z");
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(zEnable, 0);
+        xSemaphoreGive(i2c_mutex);
+    }
     head.target_z -= 10.0f;
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        gpio_set_level(zEnable, 1);
+        xSemaphoreGive(i2c_mutex);
+    }
     coordinated_move(&head);
     lv_label_set_text(g_status_label, buf);
     lvgl_port_unlock();
@@ -974,7 +1034,7 @@ void show_loading_screen(void)
     lv_obj_t *project_name_label = lv_label_create(loadingScreen);
     lv_label_set_text(project_name_label, "CONDUCTIVE INK PRINTER");
 
-lv_obj_set_style_text_font(project_name_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(project_name_label, &lv_font_montserrat_16, 0);
     // FIX: Set both width AND height, then refresh
     lv_obj_set_width(project_name_label, 220);
     lv_obj_set_height(project_name_label, LV_SIZE_CONTENT);

@@ -48,6 +48,7 @@ void parserTask(void *pvParameters)
     {
         // printf("hi");
         recieveFlag = xQueueReceive(FileName, &fileString, 1); // recieve values from the queue
+        xQueueReset(FileName); // reset the queue to prevent old values from being processed
         if (recieveFlag == pdPASS)
         {
             ESP_LOGI(MAINTAG, "I HAVE READ FROM THE QUEUE");
@@ -86,7 +87,7 @@ static void checkSwitches(void *pvParameters)
             levels[1] = gpio_get_level(ySwitch);
             levels[2] = gpio_get_level(zSwitch);
             levels[3] = gpio_get_level(eSwitch);
-            // ESP_LOGI(MAINTAG, "SWITCH LEVELS READ: %d, %d, %d, %d", levels[0], levels[1], levels[2], levels[3]);
+            //ESP_LOGI(MAINTAG, "SWITCH LEVELS READ: %d, %d, %d, %d\n", levels[0], levels[1], levels[2], levels[3]);
             xSemaphoreGive(i2c_mutex);
         }
         if (levels[0] == 1)
@@ -110,7 +111,7 @@ static void checkSwitches(void *pvParameters)
             xSemaphoreGive(eSwitchSemaphore);
             // printf("E switch triggered\n");
         }
-        vTaskDelay(pdMS_TO_TICKS(19));
+        vTaskDelay(pdMS_TO_TICKS(15));
     }
     vTaskDelete(NULL);
 }
@@ -186,7 +187,6 @@ static void blinker(void *pvParameters)
         gpio_set_level(LED1, !level);
         level = !level;
         vTaskDelay(pdMS_TO_TICKS(500));
-        
     }
 }
 
@@ -278,7 +278,7 @@ void app_main(void)
     // }
     // ESP_LOGI(MAINTAG, "SPIFFS mounted successfully");
 
-     // SPI bus for LCD and touch
+    // SPI bus for LCD and touch
     const spi_bus_config_t buscfg = {
         .sclk_io_num = SCK,
         .mosi_io_num = MOSI,
@@ -314,16 +314,13 @@ void app_main(void)
         // return;
     }
 
-    //display_init();
-
+    // display_init();
 
     if (heater_init() != ESP_OK)
     {
         ESP_LOGE(MAINTAG, "Failed to initialize heater!");
         // return;
     }
-        
-
 
     // Creating button semaphores
     StartButtonSemaphore = xSemaphoreCreateBinary();
@@ -397,9 +394,6 @@ void app_main(void)
     /////////////////////////////////////////////////////////////////////////
     // Initialize stepper motors
 
-
-    
-
     // Test Tasks
     xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 5, NULL);
     // xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
@@ -410,7 +404,7 @@ void app_main(void)
     xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
     //   Create G-code parser task
     xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, &parserHandle);
-        xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 2, NULL, 1);
+    xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 2, NULL, 1);
 
     xTaskCreate(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL);
     xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
