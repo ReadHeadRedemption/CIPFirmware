@@ -171,6 +171,9 @@ void HeaterControl()
             if (SSRE != GPIO_NUM_NC)
                 gpio_set_level(SSRE, 0);
             //vTaskDelete(NULL);
+            max31865_clear_fault_status(&max31865_dev);
+            ESP_ERROR_CHECK(max31865_set_config(&max31865_dev, &max31865_cfg));
+            vTaskDelay(pdMS_TO_TICKS(1000));
         }
         else
         {
