@@ -499,6 +499,87 @@ void parse(char *line)
             {
                 printf(line + 5);
                 bytes_written = uart_write_bytes(UART_NUM_1, line + 5, strlen(line + 5));
+                // bytes_written = uart_write_bytes(UART_NUM_1, "\n", 1);
+
+                char end_layer[] = "END_LAYER";
+                char end_result_transmit[] = "END_RESULT_TRANSMIT";
+                char ack[] = "acknowledged\n";
+                bool exit_flag = false;
+                
+                if (strstr(line, end_layer) != NULL)
+                {
+                    char result[400];
+                    int data_index = 0;
+                    while (1)
+                    {
+                        // if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+                        // {
+                        //     uart_read_bytes(UART_NUM_1, data_to_receive, event.size, portMAX_DELAY);
+                        //     ESP_LOGI(TAG, "%s", data_to_receive);
+
+                        //     if (strstr(data_to_receive, end_result_transmit) != NULL)
+                        //     {
+                        //         break;
+                        //     }
+
+                        //     printf(data_to_receive);
+                        // if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+                        // {
+                        //     // ESP_LOGI(TAG, "%s", result);
+                        //     // printf("\n");
+
+                        //     if (event.type ==UART_PATTERN_DET)
+                        //     {
+                        //         int pos = uart_pattern_pop_pos(UART_NUM_1);
+                        //         if (pos != -1) {
+                        //             int read_len = uart_read_bytes(UART_NUM_1, result, event.size, portMAX_DELAY);
+                        //             result[read_len] = '\0'; // Null-terminate the string
+                        //             printf("Received line: %s", result);
+                        //         }
+                        //     }
+                        //     // printf(result);
+                        //     // printf("\n");
+                        //    printf(line + 5);
+                        //    bytes_written = uart_write_bytes(UART_NUM_1, data_to_receive, strlen(data_to_receive));
+                       //     // printf(line + 5);
+                       //     bytes_written = uart_write_bytes(UART_NUM_1, ack, strlen(ack));
+                       // }
+                        if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY)) 
+                        {
+                            if (event.type == UART_DATA) {
+                                uint8_t temp_buf[400];
+                                int length = uart_read_bytes(UART_NUM_1, temp_buf, sizeof(temp_buf), 100 / portTICK_PERIOD_MS);
+                                for (int i = 0; i < length; i++) {
+                                    if (temp_buf[i] == '\0') {
+                                        // Null-terminate the string when newline is found
+                                        result[data_index] = '\0';
+                                        ESP_LOGI(TAG, "Received line: %s", (char *)result);
+                                        if (strstr((char *)result, end_result_transmit) != NULL)
+                                        {
+                                            printf("EXITING HERE");
+                                            exit_flag = true;
+                                            break;
+                                        }
+                                        // Reset the buffer index for the next message
+                                        data_index = 0;
+                                        // break;
+                                    } else {
+                                        // Store the byte, ignoring carriage return '\r'
+                                        result[data_index++] = temp_buf[i];
+                                    }
+                                }
+                                if (exit_flag == true)
+                                {
+                                    printf("EXITING HERE TRULY");
+                                    break;
+                                }
+                                bytes_written = uart_write_bytes(UART_NUM_1, ack, strlen(ack));
+                            }
+                        }
+
+                            // memset(result, 0, sizeof(result));
+                    }
+                }
             }
             // int bytes_written = uart_write_bytes(UART_PORT_NUM, data, strlen(data));
 
