@@ -796,15 +796,15 @@ void test_screen(void)
     lv_obj_add_event_cb(parse_btn, parsebtn_event_cb, LV_EVENT_CLICKED, headID);
 
     // Test Homing Button
-    lv_obj_t *tst_btn = lv_btn_create(testScreen);
-    lv_obj_set_size(tst_btn, action_btn_w, action_btn_h);
-    lv_obj_align(tst_btn, LV_ALIGN_TOP_MID, 55, 90);
-    lv_obj_t *tst_label = lv_label_create(tst_btn);
-    lv_label_set_text(tst_label, "TEST\nHOMING");
+    lv_obj_t *homing_btn = lv_btn_create(testScreen);
+    lv_obj_set_size(homing_btn, action_btn_w, action_btn_h);
+    lv_obj_align(homing_btn, LV_ALIGN_TOP_MID, 55, 90);
+    lv_obj_t *tst_label = lv_label_create(homing_btn);
+    lv_label_set_text(tst_label, "HOME");
     lv_obj_set_style_text_align(tst_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(tst_label, lv_color_black(), 0);
     lv_obj_center(tst_label);
-    lv_obj_add_event_cb(tst_btn, tstbtn_event_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(homing_btn, tstbtn_event_cb, LV_EVENT_CLICKED, NULL);
 
     // Purge Button
     lv_obj_t *purge = lv_btn_create(testScreen);
@@ -905,7 +905,7 @@ void display_update_status(const char *text)
 //
 ///////////////////////////////////////////////////////////////////////////
 
-static void switch_to_test_screen(lv_event_t *e)
+static void switch_to_ctrl_screen(lv_event_t *e)
 {
     if (!lvgl_port_lock(0))
         return;
@@ -939,6 +939,17 @@ static void prntscr(lv_event_t *e)
     lvgl_port_unlock();
 }
 
+static void shutdown(lv_event_t *e)
+{
+    // Turn off the display using the ESP-IDF esp_lcd driver
+    esp_lcd_panel_disp_on_off(lcd_panel, false);
+
+    // Pause LVGL tasks to stop drawing and save CPU cycles
+    lvgl_port_lock(-1);
+    
+    parse("M118 SHUTDOWN\n");
+}
+
 void home_screen(void)
 {
     if (!lvgl_port_lock(-1))
@@ -964,7 +975,7 @@ void home_screen(void)
 
     // CHANGED: Status text color to black
     lv_obj_set_style_text_color(g_status_label, lv_color_black(), 0);
-    lv_label_set_text(g_status_label, "Display initialized\nTouch the button to test");
+    lv_label_set_text(g_status_label, "CIP Firmware initialized\nSelect from Choices Below");
     lv_obj_align(g_status_label, LV_ALIGN_TOP_MID, 0, 10);
 
     ///////////////////////////////////////////////////////////////////////////
@@ -973,26 +984,26 @@ void home_screen(void)
     //
     ///////////////////////////////////////////////////////////////////////////
 
-    // Test button
-    lv_obj_t *tstbtn = lv_btn_create(scr);
-    lv_obj_set_size(tstbtn, 140, 50);
-    lv_obj_align(tstbtn, LV_ALIGN_CENTER, 0, -80);
-    lv_obj_t *tstbtnlabel = lv_label_create(tstbtn);
-    lv_label_set_text(tstbtnlabel, "TEST");
+    // Manual Control button
+    lv_obj_t *ctrl_btn = lv_btn_create(scr);
+    lv_obj_set_size(ctrl_btn, 140, 50);
+    lv_obj_align(ctrl_btn, LV_ALIGN_CENTER, 0, -80);
+    lv_obj_t *ctrl_btn_label = lv_label_create(ctrl_btn);
+    lv_label_set_text(ctrl_btn_label, "CONTROL");
 
     // CHANGED: Button text color to black
-    lv_obj_set_style_text_color(tstbtnlabel, lv_color_black(), 0);
+    lv_obj_set_style_text_color(ctrl_btn_label, lv_color_black(), 0);
 
     // Create test screen
     // test_screen();
 
     // simple event handler: increment counter and update status
-    lv_obj_add_event_cb(tstbtn, switch_to_test_screen, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(ctrl_btn, switch_to_ctrl_screen, LV_EVENT_CLICKED, NULL);
 
     // PRINT FILES BUTTON
     lv_obj_t *prntbtn = lv_btn_create(scr);
     lv_obj_set_size(prntbtn, 140, 50);
-    lv_obj_align(prntbtn, LV_ALIGN_CENTER, 0, 80);
+    lv_obj_align(prntbtn, LV_ALIGN_CENTER, 0, 0);
     lv_obj_t *prntbtnlabel = lv_label_create(prntbtn);
     lv_label_set_text(prntbtnlabel, "PRINT");
 
@@ -1002,6 +1013,21 @@ void home_screen(void)
     // printDisplay();
 
     lv_obj_add_event_cb(prntbtn, prntscr, LV_EVENT_CLICKED, NULL);
+    
+    // Shutdown button
+    lv_obj_t *shutdown_btn = lv_btn_create(scr);
+    lv_obj_set_size(shutdown_btn, 140, 50);
+    lv_obj_align(shutdown_btn, LV_ALIGN_CENTER, 0, 80);
+    lv_obj_t *shutdown_btn_label = lv_label_create(shutdown_btn);
+    lv_label_set_text(shutdown_btn_label, "SHUTDOWN");
+    lv_obj_set_style_bg_color(shutdown_btn, lv_color_hex(0xFF0000), LV_STATE_DEFAULT);
+
+    lv_obj_set_style_text_color(shutdown_btn, lv_color_black(), 0);
+
+    // // Create print screen
+    // printDisplay();
+
+    lv_obj_add_event_cb(shutdown_btn, shutdown, LV_EVENT_CLICKED, NULL);
 
     lvgl_port_unlock();
 }
@@ -1034,7 +1060,7 @@ void show_loading_screen(void)
     lv_obj_t *project_name_label = lv_label_create(loadingScreen);
     lv_label_set_text(project_name_label, "CONDUCTIVE INK PRINTER");
 
-    lv_obj_set_style_text_font(project_name_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(project_name_label, &lv_font_montserrat_14, 0);
     // FIX: Set both width AND height, then refresh
     lv_obj_set_width(project_name_label, 220);
     lv_obj_set_height(project_name_label, LV_SIZE_CONTENT);
