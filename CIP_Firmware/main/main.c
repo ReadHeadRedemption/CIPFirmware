@@ -409,4 +409,44 @@ void app_main(void)
     xTaskCreate(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL);
     xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
     ESP_LOGI(MAINTAG, "All tasks created successfully");
+
+    char ready_signal[] = "PI_READY";
+    bool exit_flag = false;
+    
+    char result[20];
+    int data_index = 0;
+    while (1)
+    {
+        if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY)) 
+        {
+            if (event.type == UART_DATA) {
+                uint8_t temp_buf[20];
+                int length = uart_read_bytes(UART_NUM_1, temp_buf, sizeof(temp_buf), 100 / portTICK_PERIOD_MS);
+                for (int i = 0; i < length; i++) {
+                    if (temp_buf[i] == '\0') {
+                        // Null-terminate the string when newline is found
+                        result[data_index] = '\0';
+                        ESP_LOGI(MAINTAG, "Received line: %s", (char *)result);
+                        if (strstr((char *)result, ready_signal) != NULL)
+                        {
+                            printf("PI MAY BE READY");
+                            exit_flag = true;
+                            break;
+                        }
+                        // Reset the buffer index for the next message
+                        data_index = 0;
+                        // break;
+                    } else {
+                        // Store the byte, ignoring carriage return '\r'
+                        result[data_index++] = temp_buf[i];
+                    }
+                }
+                if (exit_flag == true)
+                {
+                    printf("PI IS READY");
+                    break;
+                }
+            }
+        }
+    }
 }
