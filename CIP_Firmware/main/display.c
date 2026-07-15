@@ -48,10 +48,11 @@ static void reflow_parts_cb(lv_event_t *e)
     printf("Reflowing parts...\n");
     parse("G1 E-400 F200"); // large pull out to stop ink extrusion
     parse("G0 X0 Y-20 Z150");
+    parse("M84");
     parse("M190 S140");
-    parse("G4 P45"); // Sleep for a while, seconds
+    parse("G4 S45"); // Sleep for a while, seconds
     parse("M190 S190");
-    parse("G4 P30"); // Sleep for a while, seconds
+    parse("G4 S30"); // Sleep for a while, seconds
     parse("M190 S0");
     parse("G4 S1800"); // cool-down wait 30 min
 }

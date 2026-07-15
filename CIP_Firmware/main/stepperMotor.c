@@ -181,7 +181,7 @@ float K_FACTOR = 0.04f;
 esp_err_t kfact(int tool)
 {
     // Condutive Ink, Solder Paste Ink, Camera
-    float toolKval[3] = {0.04f, 0.01f, 0.0f};
+    float toolKval[3] = {0.06f, 0.01f, 0.0f};
     K_FACTOR = toolKval[tool];
     printf("K_FACTOR set to %.3f for tool %d\n", K_FACTOR, tool);
     return ESP_OK;
@@ -624,9 +624,9 @@ esp_err_t homeMotors()
     bool axis_homed[3] = {false, false, false};
 
     // Set initial positions (arbitrary non-zero values)
-    motors[MOTOR_X].position = 999.0f;
-    motors[MOTOR_Y].position = 999.0f;
-    motors[MOTOR_Z].position = 999.0f;
+    motors[MOTOR_X].position = 50.0f;
+    motors[MOTOR_Y].position = 50.0f;
+    motors[MOTOR_Z].position = 50.0f;
 
     // 1. CRITICAL: Initialize the homer struct to match the current fake positions
     head.target_x = motors[MOTOR_X].position;

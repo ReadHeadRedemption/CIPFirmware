@@ -3,7 +3,7 @@
 #include "IOExpander.h"
 #include "esp_task_wdt.h"
 
-// #define DEBUG_PURGE
+#define DEBUG_PURGE
 
 static const char *TAG = "GCODE_PARSER";
 
@@ -32,12 +32,21 @@ void setHeadCallback(HeadChangeCallback callback)
 }
 int current_head_id = 3;
 
+int eStepSize = 40;
+int purgeCount = 20;
+
 void parsetoolparam(int tool)
 {
     // cond3 sp cam
-    float toolscale[] = {0.00015f, 0.00005, 0.0f};
+    float toolscale[] = {0.00035f, 0.00005, 0.0f};
+    int eStep[] = {40, 40, 0};
+    int purgeCounts[] = {30, 20, 0};
+
     eScale = toolscale[tool];
-    printf("Tool %d selected, eScale set to %.8f\n", tool, eScale);
+    eStepSize = eStep[tool];
+    purgeCount = purgeCounts[tool];
+
+    printf("Tool %d selected parameters updated\n", tool);
 }
 
 void readParseFile(char *fileLocation)
@@ -61,24 +70,6 @@ void readParseFile(char *fileLocation)
         //     gpio_set_level(eEnable, 0);
         //     xSemaphoreGive(i2c_mutex);
         // }
-#ifdef DEBUG_PURGE
-        char up[] = "G0 Z5.5";
-
-        char mini_extrude[] = "G1 E40 F200";
-        // char down[] = "G0 Z0.5";
-
-        // TEMPORARY CODE FOR INITIAL EXTRUSION
-        parse(up);
-        parse(mini_extrude);
-        for (int i = 0; i < 10; i++)
-        {
-            parse(mini_extrude);
-            vTaskDelay(pdMS_TO_TICKS(2500));
-        }
-        // vTaskDelay(pdMS_TO_TICKS(10000));
-        // parse(down);
-
-#endif /* DEBUG_PURGE */
 
         char *found = strstr(fgets(line, sizeof(line), file), "TOTAL_LINES:");
 
@@ -104,6 +95,7 @@ void readParseFile(char *fileLocation)
             }
         }
     }
+    parse("M84"); // Disable motors after print
     fclose(file);
     ESP_LOGI(TAG, "FINISH READING FILE");
 }
@@ -239,7 +231,7 @@ void parse(char *line)
                 }
                 else
                 {
-                    head.feed_rate_hz = 4000;
+                    head.feed_rate_hz = 3600;
                 }
                 if ((p = strchr(line, 'E')) != NULL)
                 {
@@ -303,7 +295,7 @@ void parse(char *line)
                 if (pullback)
                 {
                     head.feed_rate_hz = 200;
-                    head.moveE -= extrude * (scale * eScale * 0.15f); // Pull back 15% of the extruded amount
+                    head.moveE -= extrude * (scale * eScale * 0.0f); // Pull back 10% of the extruded amount
                     // head.moveE = 0;
                     ESP_LOGI(TAG, "MOVING TO X:%.3f Y:%.3f Z:%.3f",
                              head.target_x, head.target_y, head.target_z);
@@ -591,6 +583,30 @@ void parse(char *line)
                 gpio_set_level(eEnable, 0);
                 xSemaphoreGive(i2c_mutex);
             }
+            parse("G4 S3");
+            parse("G28");
+
+#ifdef DEBUG_PURGE
+            char up[] = "G0 X0 Y200 Z60";
+
+            char mini_extrude[50];
+            snprintf(mini_extrude, sizeof(mini_extrude), "G1 E%d F200", eStepSize);
+
+            // char down[] = "G0 Z0.5";
+
+            // TEMPORARY CODE FOR INITIAL EXTRUSION
+            parse(up);
+            parse(mini_extrude);
+            for (int i = 0; i < purgeCount; i++)
+            {
+                parse(mini_extrude);
+                vTaskDelay(pdMS_TO_TICKS(2500));
+            }
+            vTaskDelay(pdMS_TO_TICKS(10000));
+            // parse(down);
+
+#endif /* DEBUG_PURGE */
+
             ESP_LOGI(TAG, "Tool change successful.");
         }
     }
