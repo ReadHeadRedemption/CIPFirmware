@@ -487,6 +487,11 @@ void parse(char *line)
                 printf("HERE!!");
                 char capture[] = "CAPTURE\n";
                 bytes_written = uart_write_bytes(UART_NUM_1, capture, strlen(capture));
+                if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+                {
+                    uart_read_bytes(UART_NUM_1, data_to_receive, event.size, portMAX_DELAY);
+                    ESP_LOGI(TAG, "%s", data_to_receive);
+                }
             }
             else
             {
@@ -571,6 +576,15 @@ void parse(char *line)
                         }
 
                             // memset(result, 0, sizeof(result));
+                        
+                    }
+                }
+                else
+                {
+                    if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+                    {
+                        uart_read_bytes(UART_NUM_1, data_to_receive, event.size, portMAX_DELAY);
+                        ESP_LOGI(TAG, "%s", data_to_receive);
                     }
                 }
             }
@@ -578,12 +592,6 @@ void parse(char *line)
 
             printf("%d", bytes_written);
             printf("HELOO");
-
-            if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
-            {
-                uart_read_bytes(UART_NUM_1, data_to_receive, event.size, portMAX_DELAY);
-                ESP_LOGI(TAG, "%s", data_to_receive);
-            }
         }
         else if (strcmp(cmd, "M140") == 0)
         {
