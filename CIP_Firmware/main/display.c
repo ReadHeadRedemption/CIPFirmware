@@ -170,7 +170,7 @@ static void stop_print_cb(lv_event_t *e)
     // head.moveE -= 200.0f;
     // head.feed_rate_hz = 500;
     // coordinated_move(&head);
-    parse("G0 Z100 F5000"); // Move Z up to avoid collision
+    parse("G1 Z100 E-200 F500"); // Move Z up to avoid collision
     if (print_status_label)
     {
         lv_label_set_text(print_status_label, "Print STOPPED");

@@ -403,7 +403,7 @@ void app_main(void)
     //  Create heater control task
     xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
     //   Create G-code parser task
-    xTaskCreate(parserTask, "GCodeParser", 8192, NULL, 5, &parserHandle);
+    xTaskCreate(parserTask, "GCodeParser", 16384, NULL, 5, &parserHandle);
     xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 2, NULL, 1);
 
     xTaskCreate(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL);

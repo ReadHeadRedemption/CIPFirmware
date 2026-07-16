@@ -38,8 +38,8 @@ int purgeCount = 20;
 void parsetoolparam(int tool)
 {
     // cond3 sp cam
-    float toolscale[] = {0.00035f, 0.00005, 0.0f};
-    int eStep[] = {40, 40, 0};
+    float toolscale[] = {0.0005f, 0.00005, 0.0f};
+    int eStep[] = {80, 40, 0};
     int purgeCounts[] = {30, 20, 0};
 
     eScale = toolscale[tool];
@@ -265,7 +265,7 @@ void parse(char *line)
                 }
                 head.feed_rate_hz = 200;
                 coordinated_move(&head);
-                head.feed_rate_hz = 250;
+                head.feed_rate_hz = 125;
                 if (distMode)
                 {
                     if (coordChange[0])
@@ -306,6 +306,7 @@ void parse(char *line)
                 // WAITING FOR 100 MILLISECONDS TO LET SOLDER PASTE STICK
                 if (fabs(lastLocation[X] - head.target_x) > 1.0f || fabs(lastLocation[Y] - head.target_y) > 1.0f)
                     vTaskDelay(pdMS_TO_TICKS(100));
+                    // printf("WAITING\n");
                 total_extruded += extrude;
                 break;
             default:
