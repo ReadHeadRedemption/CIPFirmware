@@ -739,14 +739,14 @@ esp_err_t homeMotors()
         gpio_set_level(motors[MOTOR_Y].enable_pin, 0);
         xSemaphoreGive(i2c_mutex);
     }
-    head.target_x = 29.0f;
+    head.target_x = 32.0f;
     head.target_y = 242.0f;
     coordinated_move(&head);
 
     // // Set actual home
     motors[MOTOR_X].position = 0.0f;
     motors[MOTOR_Y].position = 200.0f;
-    // motors[MOTOR_Z].position = 25.0f;
+    // motors[MOTOR_Z].position = 25.0f;125
     head.target_x = 0.0f;
     head.target_y = 200.0f;
 

@@ -39,8 +39,8 @@ void parsetoolparam(int tool)
 {
     // cond3 sp cam
     float toolscale[] = {0.0005f, 0.00005, 0.0f};
-    int eStep[] = {80, 40, 0};
-    int purgeCounts[] = {30, 20, 0};
+    int eStep[] = {60, 1, 0};
+    int purgeCounts[] = {40, 5, 0};
 
     eScale = toolscale[tool];
     eStepSize = eStep[tool];
@@ -255,7 +255,6 @@ void parse(char *line)
                     extrude = (float)sqrt((dE[0] * dE[0]) +
                                           (dE[1] * dE[1]) +
                                           (dE[2] * dE[2]));
-
                     head.moveE += extrude * scale * eScale;
                     if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
                     {
@@ -263,9 +262,9 @@ void parse(char *line)
                         xSemaphoreGive(i2c_mutex);
                     }
                 }
-                head.feed_rate_hz = 200;
+                head.feed_rate_hz = 100;
                 coordinated_move(&head);
-                head.feed_rate_hz = 125;
+                head.feed_rate_hz = 50;
                 if (distMode)
                 {
                     if (coordChange[0])
@@ -643,7 +642,7 @@ void parse(char *line)
         }
         else
         {
-            char *toolIndex[] = {"Conductive Ink", "Insulator Ink", "Camera", NULL};
+            char *toolIndex[] = {"CONDUCTIVE INK", "SOLDER PASTE", "CAMERA", NULL};
             ESP_LOGI(TAG, "CALLING T: TOOL CHANGE TO %s", toolIndex[tool]);
             kfact(tool);
             parsetoolparam(tool);
