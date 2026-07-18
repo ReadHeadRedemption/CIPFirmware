@@ -414,6 +414,7 @@ void app_main(void)
     ESP_LOGI(MAINTAG, "All tasks created successfully");
 
     char ready_signal[] = "PI_READY";
+    char ack_ready_signal[] = "ESP_READY\n";
     bool exit_flag = false;
 
     char result[20];
@@ -437,6 +438,7 @@ void app_main(void)
                         if (strstr((char *)result, ready_signal) != NULL)
                         {
                             printf("PI MAY BE READY\n");
+                            uart_write_bytes(UART_NUM_1, ack_ready_signal, strlen(ack_ready_signal));
                             exit_flag = true;
                             break;
                         }
