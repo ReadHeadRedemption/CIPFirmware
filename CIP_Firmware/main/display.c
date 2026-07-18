@@ -137,7 +137,7 @@ void show_print_finished_screen()
     lv_obj_set_width(reflow_temp, 220);
     lv_obj_set_style_text_align(reflow_temp, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text_fmt(reflow_temp, "Temperature: --- °C");
-    lv_obj_align(reflow_temp, LV_ALIGN_TOP_MID, 0, 190);
+    lv_obj_align(reflow_temp, LV_ALIGN_TOP_MID, 0, 200);
     setTempCallback(reflowTempChange);
 
     ESP_LOGI(DISPLAYTAG, "Loading print finished screen...");
