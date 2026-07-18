@@ -753,7 +753,7 @@ void test_screen(void)
     lv_obj_t *status_label = lv_label_create(testScreen);
     lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_color(status_label, lv_color_black(), 0);
-    lv_label_set_text(status_label, "Test Screen");
+    lv_label_set_text(status_label, "Manual Control Screen");
     lv_obj_align(status_label, LV_ALIGN_TOP_LEFT, 5, 15);
 
     // Back Button (Top Right)

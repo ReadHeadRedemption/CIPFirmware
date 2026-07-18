@@ -157,8 +157,13 @@ void HeaterControl()
     BaseType_t new_temp_unreached = pdFALSE;
     while (1)
     {
+        esp_err_t res = ESP_OK;
 
-        esp_err_t res = max31865_measure(&max31865_dev, &current_temp);
+        if (xSemaphoreTake(max31865_mutex, portMAX_DELAY) == pdTRUE)
+        {
+            res = max31865_measure(&max31865_dev, &current_temp);
+        }
+        xSemaphoreGive(max31865_mutex);
 
         // max31865_clear_fault_status(&max31865_dev);
 
@@ -171,18 +176,17 @@ void HeaterControl()
             if (SSRE != GPIO_NUM_NC)
                 gpio_set_level(SSRE, 0);
             //vTaskDelete(NULL);
-            max31865_clear_fault_status(&max31865_dev);
-            ESP_ERROR_CHECK(max31865_set_config(&max31865_dev, &max31865_cfg));
+            if (xSemaphoreTake(max31865_mutex, portMAX_DELAY) == pdTRUE)
+            {
+                max31865_clear_fault_status(&max31865_dev);
+                ESP_ERROR_CHECK(max31865_set_config(&max31865_dev, &max31865_cfg));
+            }
+            xSemaphoreGive(max31865_mutex);
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
         else
         {
             ESP_LOGI(HEATERTAG, "Temperature: %.4f C (%.4f F)", current_temp, current_temp * 1.8 + 32);
-
-            // if (tempcb != NULL)
-            // {
-            //     tempcb(current_temp);
-            // }
 
             // If the temperature is less than the desired, heat up to the desired temperature
             if (current_temp < target_temp)
@@ -257,5 +261,46 @@ void HeaterControl()
                 skip_for_new_temp = pdFALSE;
             }
         }
+    }
+}
+
+void TemperatureWatch()
+{
+    float current_temp;
+
+    while (1)
+    {
+        esp_err_t res = ESP_OK;
+        if (xSemaphoreTake(max31865_mutex, portMAX_DELAY) == pdTRUE)
+        {
+            res = max31865_measure(&max31865_dev, &current_temp);
+        }
+        xSemaphoreGive(max31865_mutex);
+
+        // max31865_clear_fault_status(&max31865_dev);
+
+        // Two checks: check if there is any result, and if so, a sanity check for temperature. Below 18 C is not sane
+        if (res != ESP_OK || current_temp < 10)
+        {
+            ESP_LOGE(HEATERTAG, "Failed to measure: %d (%s)", res, esp_err_to_name(res));
+            if (SSRE != GPIO_NUM_NC)
+                gpio_set_level(SSRE, 0);
+            //vTaskDelete(NULL);
+            if (xSemaphoreTake(max31865_mutex, portMAX_DELAY) == pdTRUE)
+            {
+                max31865_clear_fault_status(&max31865_dev);
+                ESP_ERROR_CHECK(max31865_set_config(&max31865_dev, &max31865_cfg));
+            }
+            xSemaphoreGive(max31865_mutex);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        else
+        {
+            if (tempcb != NULL)
+            {
+                tempcb(current_temp);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

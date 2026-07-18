@@ -58,6 +58,7 @@ extern SemaphoreHandle_t tempReachedSemaphore;
 
 extern SemaphoreHandle_t SDCardMutex;
 extern SemaphoreHandle_t i2c_mutex;
+extern SemaphoreHandle_t max31865_mutex;
 
 extern SemaphoreHandle_t allowMove;
 extern SemaphoreHandle_t nohead;

@@ -340,6 +340,7 @@ void app_main(void)
     // Mutexes
     SDCardMutex = xSemaphoreCreateMutex();
     i2c_mutex = xSemaphoreCreateMutex();
+    max31865_mutex = xSemaphoreCreateMutex();
 
     // Queues
     FileName = xQueueCreate(1, (sizeof(char) * 128));
@@ -396,6 +397,8 @@ void app_main(void)
     xTaskCreatePinnedToCore(console_task, "ConsoleTask", 4096, NULL, 5, NULL, 0);
     // Create heater control task
     xTaskCreatePinnedToCore(HeaterControl, "HeaterControl", 4096, NULL, 4, NULL, 0);
+    // Check temperature for display task
+    xTaskCreatePinnedToCore(TemperatureWatch, "TemperatureWatchTask", 4096, NULL, 1, NULL, 1);
     // Create G-code parser task
     xTaskCreatePinnedToCore(parserTask, "GCodeParser", 16384, NULL, 4, &parserHandle, 1);
     // Display Task
@@ -430,9 +433,10 @@ void app_main(void)
                         // Null-terminate the string when newline is found
                         result[data_index] = '\0';
                         ESP_LOGI(MAINTAG, "Received line: %s", (char *)result);
+                        printf("\n");
                         if (strstr((char *)result, ready_signal) != NULL)
                         {
-                            printf("PI MAY BE READY");
+                            printf("PI MAY BE READY\n");
                             exit_flag = true;
                             break;
                         }
