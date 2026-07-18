@@ -48,7 +48,7 @@ void parserTask(void *pvParameters)
     {
         // printf("hi");
         recieveFlag = xQueueReceive(FileName, &fileString, 1); // recieve values from the queue
-        xQueueReset(FileName); // reset the queue to prevent old values from being processed
+        xQueueReset(FileName);                                 // reset the queue to prevent old values from being processed
         if (recieveFlag == pdPASS)
         {
             ESP_LOGI(MAINTAG, "I HAVE READ FROM THE QUEUE");
@@ -87,7 +87,7 @@ static void checkSwitches(void *pvParameters)
             levels[1] = gpio_get_level(ySwitch);
             levels[2] = gpio_get_level(zSwitch);
             levels[3] = gpio_get_level(eSwitch);
-            //ESP_LOGI(MAINTAG, "SWITCH LEVELS READ: %d, %d, %d, %d\n", levels[0], levels[1], levels[2], levels[3]);
+            // ESP_LOGI(MAINTAG, "SWITCH LEVELS READ: %d, %d, %d, %d\n", levels[0], levels[1], levels[2], levels[3]);
             xSemaphoreGive(i2c_mutex);
         }
         if (levels[0] == 1)
@@ -393,37 +393,40 @@ void app_main(void)
     //
     /////////////////////////////////////////////////////////////////////////
     // Initialize stepper motors
-
-    // Test Tasks
-    xTaskCreate(moveMotor, "MoveMotor", 4096, NULL, 5, NULL);
-    // xTaskCreate(testYaxis, "stop yaxis grinding", 4096, NULL, 2, NULL);
-    // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
-    xTaskCreate(console_task, "ConsoleTask", 4096, NULL, 1, NULL);
-    // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
-    //  Create heater control task
-    xTaskCreate(HeaterControl, "HeaterControl", 4096, NULL, 1, NULL);
-    //   Create G-code parser task
-    xTaskCreate(parserTask, "GCodeParser", 16384, NULL, 5, &parserHandle);
+    xTaskCreatePinnedToCore(console_task, "ConsoleTask", 4096, NULL, 5, NULL, 0);
+    // Create heater control task
+    xTaskCreatePinnedToCore(HeaterControl, "HeaterControl", 4096, NULL, 4, NULL, 0);
+    // Create G-code parser task
+    xTaskCreatePinnedToCore(parserTask, "GCodeParser", 16384, NULL, 4, &parserHandle, 1);
+    // Display Task
     xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 2, NULL, 1);
+    // Poll limit switches task
+    xTaskCreatePinnedToCore(checkSwitches, "poll limit switches", 4096, NULL, 2, NULL, 0);
+    // Test Tasks
+    // xTaskCreatePinnedToCore(moveMotor, "MoveMotor", 4096, NULL, 5, NULL, 1);
+    // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
+    // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
+    // xTaskCreatePinnedToCore(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL, 0);
 
-    xTaskCreate(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL);
-    xTaskCreate(checkSwitches, "poll limit switches", 4096, NULL, 3, NULL);
     ESP_LOGI(MAINTAG, "All tasks created successfully");
 
     char ready_signal[] = "PI_READY";
     bool exit_flag = false;
-    
+
     char result[20];
     int data_index = 0;
     while (1)
     {
-        if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY)) 
+        if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
         {
-            if (event.type == UART_DATA) {
+            if (event.type == UART_DATA)
+            {
                 uint8_t temp_buf[20];
                 int length = uart_read_bytes(UART_NUM_1, temp_buf, sizeof(temp_buf), 100 / portTICK_PERIOD_MS);
-                for (int i = 0; i < length; i++) {
-                    if (temp_buf[i] == '\0') {
+                for (int i = 0; i < length; i++)
+                {
+                    if (temp_buf[i] == '\0')
+                    {
                         // Null-terminate the string when newline is found
                         result[data_index] = '\0';
                         ESP_LOGI(MAINTAG, "Received line: %s", (char *)result);
@@ -436,7 +439,9 @@ void app_main(void)
                         // Reset the buffer index for the next message
                         data_index = 0;
                         // break;
-                    } else {
+                    }
+                    else
+                    {
                         // Store the byte, ignoring carriage return '\r'
                         result[data_index++] = temp_buf[i];
                     }

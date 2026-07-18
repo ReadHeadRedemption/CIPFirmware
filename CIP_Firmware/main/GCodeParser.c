@@ -84,9 +84,9 @@ void readParseFile(char *fileLocation)
         {
             if (xSemaphoreTake(parseSemaphore, portMAX_DELAY) == pdTRUE)
             {
+                readLines++;
                 parse(line);
                 // vTaskDelay(pdMS_TO_TICKS(5000));
-                readLines++;
                 if (lineCountCb != NULL)
                 {
                     lineCountCb(readLines, totalLines); // Notify display immediately
@@ -231,7 +231,7 @@ void parse(char *line)
                 }
                 else
                 {
-                    head.feed_rate_hz = 3600;
+                    head.feed_rate_hz = 500;
                 }
                 if ((p = strchr(line, 'E')) != NULL)
                 {
@@ -262,9 +262,9 @@ void parse(char *line)
                         xSemaphoreGive(i2c_mutex);
                     }
                 }
-                head.feed_rate_hz = 100;
+                head.feed_rate_hz = 1000;
                 coordinated_move(&head);
-                head.feed_rate_hz = 50;
+                head.feed_rate_hz = 500;
                 if (distMode)
                 {
                     if (coordChange[0])
@@ -626,6 +626,8 @@ void parse(char *line)
         if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE)
         {
             gpio_set_level(eEnable, 1);
+            // gpio_set_level(xEnable, 0);
+            // gpio_set_level(yEnable, 0);
             xSemaphoreGive(i2c_mutex);
         }
         int tool = 0;

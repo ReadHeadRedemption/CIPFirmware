@@ -179,10 +179,10 @@ void HeaterControl()
         {
             ESP_LOGI(HEATERTAG, "Temperature: %.4f C (%.4f F)", current_temp, current_temp * 1.8 + 32);
 
-            if (tempcb != NULL)
-            {
-                tempcb(current_temp);
-            }
+            // if (tempcb != NULL)
+            // {
+            //     tempcb(current_temp);
+            // }
 
             // If the temperature is less than the desired, heat up to the desired temperature
             if (current_temp < target_temp)
