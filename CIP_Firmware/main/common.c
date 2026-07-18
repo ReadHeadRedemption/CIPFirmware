@@ -17,6 +17,7 @@ SemaphoreHandle_t tempReachedSemaphore = NULL;
 
 SemaphoreHandle_t SDCardMutex = NULL;
 SemaphoreHandle_t i2c_mutex = NULL;
+SemaphoreHandle_t max31865_mutex;
 
 SemaphoreHandle_t allowMove = NULL;
 SemaphoreHandle_t nohead = NULL;

@@ -20,6 +20,7 @@ esp_err_t heater_init(void);
 
 // FreeRTOS task — pass target temp as float* via pvParameters
 void HeaterControl();
+void TemperatureWatch();
 
 typedef void (*tempCallback)(float temp);
 
