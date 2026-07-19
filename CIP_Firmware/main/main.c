@@ -3,6 +3,8 @@
 
 static const char *MAINTAG = "MAIN";
 
+#define DEBUG_UART
+
 /*
 List of Tasks
 4 Extruder Motors:
@@ -378,7 +380,7 @@ void app_main(void)
     uart_param_config(UART_NUM_1, &uart_config2);
 
     // Set UART pins (using -1 for pins you don't want to change)
-    uart_set_pin(UART_NUM_1, PI_TX, PI_RX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    uart_set_pin(UART_NUM_1, PI_RX, PI_TX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
     // Configure UART parameters
     const int uart_buffer_size = (1024 * 2);
@@ -413,51 +415,146 @@ void app_main(void)
 
     ESP_LOGI(MAINTAG, "All tasks created successfully");
 
+    // char ready_signal[] = "PI_READY";
+    // char ack_ready_signal[] = "ESP_READY\n";
+    // bool exit_flag = false;
+
+    // char result[20];
+    // int data_index = 0;
+    #ifdef DEBUG_UART
     char ready_signal[] = "PI_READY";
     char ack_ready_signal[] = "ESP_READY\n";
+
+    char result[64] = {0};
+    int data_index = 0;
     bool exit_flag = false;
 
-    char result[20];
-    int data_index = 0;
     while (1)
     {
-        if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+        if (xQueueReceive(uart_queue, &event, portMAX_DELAY))
         {
             if (event.type == UART_DATA)
             {
-                uint8_t temp_buf[20];
-                int length = uart_read_bytes(UART_NUM_1, temp_buf, sizeof(temp_buf), 100 / portTICK_PERIOD_MS);
+                uint8_t temp_buf[64];
+
+                int length = uart_read_bytes(
+                    UART_NUM_1,
+                    temp_buf,
+                    sizeof(temp_buf),
+                    pdMS_TO_TICKS(100)
+                );
+
                 for (int i = 0; i < length; i++)
                 {
-                    if (temp_buf[i] == '\0')
+                    char c = (char)temp_buf[i];
+
+                    /*
+                    * Ignore carriage return
+                    */
+                    if (c == '\r')
                     {
-                        // Null-terminate the string when newline is found
+                        continue;
+                    }
+
+                    /*
+                    * Complete message received
+                    */
+                    if (c == '\n')
+                    {
                         result[data_index] = '\0';
-                        ESP_LOGI(MAINTAG, "Received line: %s", (char *)result);
-                        printf("\n");
-                        if (strstr((char *)result, ready_signal) != NULL)
+
+                        printf("MESSAGE = [%s]\n", result);
+                        printf("LENGTH  = %d\n", data_index);
+
+                        if (strcmp(result, "PI_READY") == 0)
                         {
-                            printf("PI MAY BE READY\n");
-                            uart_write_bytes(UART_NUM_1, ack_ready_signal, strlen(ack_ready_signal));
+                            printf("PI IS READY!\n");
+
+                            uart_write_bytes(
+                                UART_NUM_1,
+                                ack_ready_signal,
+                                strlen(ack_ready_signal)
+                            );
+
                             exit_flag = true;
+
                             break;
                         }
-                        // Reset the buffer index for the next message
+
+                        /*
+                        * Not PI_READY, so reset for next message
+                        */
                         data_index = 0;
-                        // break;
+                        result[0] = '\0';
                     }
                     else
                     {
-                        // Store the byte, ignoring carriage return '\r'
-                        result[data_index++] = temp_buf[i];
+                        /*
+                        * Make sure we don't overflow result[]
+                        */
+                        if (data_index < sizeof(result) - 1)
+                        {
+                            result[data_index++] = c;
+                        }
+                        else
+                        {
+                            printf("UART MESSAGE TOO LONG - RESETTING\n");
+
+                            data_index = 0;
+                            result[0] = '\0';
+                        }
                     }
                 }
-                if (exit_flag == true)
+                
+
+                if (exit_flag)
                 {
-                    printf("PI IS READY");
                     break;
                 }
             }
         }
     }
+    printf("EXITING MAIN");
+    #endif
+//     while (1)
+//     {
+//         if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+//         {
+//             if (event.type == UART_DATA)
+//             {
+//                 uint8_t temp_buf[20];
+//                 int length = uart_read_bytes(UART_NUM_1, temp_buf, sizeof(temp_buf), 100 / portTICK_PERIOD_MS);
+//                 for (int i = 0; i < length; i++)
+//                 {
+//                     if (temp_buf[i] == '\n')
+//                     {
+//                         // Null-terminate the string when newline is found
+//                         result[data_index] = '\0';
+//                         ESP_LOGI(MAINTAG, "Received line: %s", (char *)result);
+//                         printf("\n");
+//                         if (strstr((char *)result, ready_signal) != NULL)
+//                         {
+//                             printf("PI MAY BE READY\n");
+//                             uart_write_bytes(UART_NUM_1, ack_ready_signal, strlen(ack_ready_signal));
+//                             exit_flag = true;
+//                             break;
+//                         }
+//                         // Reset the buffer index for the next message
+//                         data_index = 0;
+//                         // break;
+//                     }
+//                     else
+//                     {
+//                         // Store the byte, ignoring carriage return '\r'
+//                         result[data_index++] = temp_buf[i];
+//                     }
+//                 }
+//                 if (exit_flag == true)
+//                 {
+//                     printf("PI IS READY");
+//                     break;
+//                 }
+//             }
+//         }
+//     }
 }
