@@ -240,7 +240,6 @@ void app_main(void)
 
     bootup = xSemaphoreCreateBinary();
 
-    xSemaphoreTake(bootup, portMAX_DELAY);
     gpio_set_direction(xStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(yStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(zStep, GPIO_MODE_OUTPUT);
