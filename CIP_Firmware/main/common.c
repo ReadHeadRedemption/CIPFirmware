@@ -12,6 +12,7 @@ SemaphoreHandle_t zSwitchSemaphore = NULL;
 SemaphoreHandle_t eSwitchSemaphore = NULL;
 SemaphoreHandle_t StartButtonSemaphore = NULL;
 SemaphoreHandle_t TestButtonSemaphore = NULL;
+SemaphoreHandle_t bootup = NULL;
 SemaphoreHandle_t parseSemaphore = NULL;
 SemaphoreHandle_t tempReachedSemaphore = NULL;
 

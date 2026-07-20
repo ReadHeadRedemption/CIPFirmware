@@ -53,6 +53,7 @@ extern SemaphoreHandle_t zSwitchSemaphore;
 extern SemaphoreHandle_t eSwitchSemaphore;
 extern SemaphoreHandle_t StartButtonSemaphore;
 extern SemaphoreHandle_t TestButtonSemaphore;
+extern SemaphoreHandle_t bootup;
 extern SemaphoreHandle_t parseSemaphore;
 extern SemaphoreHandle_t tempReachedSemaphore; 
 

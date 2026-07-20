@@ -184,7 +184,7 @@ void onLineCountChanged(int readLines, int totalLines)
 {
     // printf("Line Count Changed: %d / %d\n", readLines, totalLines);
 
-    if ((readLines >= totalLines && totalLines > 0))
+    if ((readLines > totalLines && totalLines > 0))
     {
         show_print_finished_screen();
 
@@ -947,7 +947,7 @@ static void shutdown(lv_event_t *e)
 
     // Pause LVGL tasks to stop drawing and save CPU cycles
     lvgl_port_lock(-1);
-    
+
     parse("M118 SHUTDOWN\n");
 }
 
@@ -1014,7 +1014,7 @@ void home_screen(void)
     // printDisplay();
 
     lv_obj_add_event_cb(prntbtn, prntscr, LV_EVENT_CLICKED, NULL);
-    
+
     // Shutdown button
     lv_obj_t *shutdown_btn = lv_btn_create(scr);
     lv_obj_set_size(shutdown_btn, 140, 50);
@@ -1230,15 +1230,18 @@ void display_task(void *pvParameters)
 
     // 3. Optional: Move back to home screen after initialization
     // (If you don't do this, you might be left on the last screen you built)
-    // if (!lvgl_port_lock(-1))
-    //     return;
-    // lv_scr_load(loadingScreen);
-    // lvgl_port_unlock();
-    // vTaskDelay(pdMS_TO_TICKS(7000)); // Show loading screen for 2 seconds
     if (!lvgl_port_lock(-1))
         return;
-    lv_scr_load(g_main_screen);
+    lv_scr_load(loadingScreen);
     lvgl_port_unlock();
+    // vTaskDelay(pdMS_TO_TICKS(7000)); // Show loading screen for 2 seconds
+    if (semaphoreTake(bootup, portMAX_DELAY) == pdTRUE)
+    {
+        if (!lvgl_port_lock(-1))
+            return;
+        lv_scr_load(g_main_screen);
+        lvgl_port_unlock();
+    }
     // 4. Stay alive
     while (1)
     {

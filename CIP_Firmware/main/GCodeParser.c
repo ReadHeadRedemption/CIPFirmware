@@ -262,9 +262,9 @@ void parse(char *line)
                         xSemaphoreGive(i2c_mutex);
                     }
                 }
-                head.feed_rate_hz = 1000;
+                head.feed_rate_hz = 100;
                 coordinated_move(&head);
-                head.feed_rate_hz = 500;
+                head.feed_rate_hz = 50;
                 if (distMode)
                 {
                     if (coordChange[0])
@@ -304,8 +304,8 @@ void parse(char *line)
                 }
                 // WAITING FOR 100 MILLISECONDS TO LET SOLDER PASTE STICK
                 if (fabs(lastLocation[X] - head.target_x) > 1.0f || fabs(lastLocation[Y] - head.target_y) > 1.0f)
-                    vTaskDelay(pdMS_TO_TICKS(100));
-                    // printf("WAITING\n");
+                    vTaskDelay(pdMS_TO_TICKS(200));
+                // printf("WAITING\n");
                 total_extruded += extrude;
                 break;
             default:
@@ -486,7 +486,7 @@ void parse(char *line)
                 printf("HERE!!");
                 char capture[] = "CAPTURE\n";
                 bytes_written = uart_write_bytes(UART_NUM_1, capture, strlen(capture));
-                if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+                if (xQueueReceive(uart_queue, (void *)&event, portMAX_DELAY))
                 {
                     uart_read_bytes(UART_NUM_1, data_to_receive, event.size, portMAX_DELAY);
                     ESP_LOGI(TAG, "%s", data_to_receive);
@@ -502,16 +502,16 @@ void parse(char *line)
                 char end_result_transmit[] = "END_RESULT_TRANSMIT";
                 char ack[] = "acknowledged\n";
                 bool exit_flag = false;
-                
+
                 if (strstr(line, end_layer) != NULL)
                 {
                     char result[400];
                     int data_index = 0;
                     while (1)
                     {
-                        // if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+                        // if (xQueueReceive(uart_queue, (void *)&event, pdMS_TO_TICKS(500)))
                         // {
-                        //     uart_read_bytes(UART_NUM_1, data_to_receive, event.size, portMAX_DELAY);
+                        //     uart_read_bytes(UART_NUM_1, data_to_receive, event.size, pdMS_TO_TICKS(500));
                         //     ESP_LOGI(TAG, "%s", data_to_receive);
 
                         //     if (strstr(data_to_receive, end_result_transmit) != NULL)
@@ -520,7 +520,7 @@ void parse(char *line)
                         //     }
 
                         //     printf(data_to_receive);
-                        // if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+                        // if (xQueueReceive(uart_queue, (void *)&event, pdMS_TO_TICKS(500)))
                         // {
                         //     // ESP_LOGI(TAG, "%s", result);
                         //     // printf("\n");
@@ -529,7 +529,7 @@ void parse(char *line)
                         //     {
                         //         int pos = uart_pattern_pop_pos(UART_NUM_1);
                         //         if (pos != -1) {
-                        //             int read_len = uart_read_bytes(UART_NUM_1, result, event.size, portMAX_DELAY);
+                        //             int read_len = uart_read_bytes(UART_NUM_1, result, event.size, pdMS_TO_TICKS(500));
                         //             result[read_len] = '\0'; // Null-terminate the string
                         //             printf("Received line: %s", result);
                         //         }
@@ -538,16 +538,19 @@ void parse(char *line)
                         //     // printf("\n");
                         //    printf(line + 5);
                         //    bytes_written = uart_write_bytes(UART_NUM_1, data_to_receive, strlen(data_to_receive));
-                       //     // printf(line + 5);
-                       //     bytes_written = uart_write_bytes(UART_NUM_1, ack, strlen(ack));
-                       // }
-                        if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY)) 
+                        //     // printf(line + 5);
+                        //     bytes_written = uart_write_bytes(UART_NUM_1, ack, strlen(ack));
+                        // }
+                        if (xQueueReceive(uart_queue, (void *)&event, portMAX_DELAY))
                         {
-                            if (event.type == UART_DATA) {
+                            if (event.type == UART_DATA)
+                            {
                                 uint8_t temp_buf[400];
-                                int length = uart_read_bytes(UART_NUM_1, temp_buf, sizeof(temp_buf), 100 / portTICK_PERIOD_MS);
-                                for (int i = 0; i < length; i++) {
-                                    if (temp_buf[i] == '\0') {
+                                int length = uart_read_bytes(UART_NUM_1, temp_buf, sizeof(temp_buf), portMAX_DELAY);
+                                for (int i = 0; i < length; i++)
+                                {
+                                    if (temp_buf[i] == '\n')
+                                    {
                                         // Null-terminate the string when newline is found
                                         result[data_index] = '\0';
                                         ESP_LOGI(TAG, "Received line: %s", (char *)result);
@@ -560,9 +563,14 @@ void parse(char *line)
                                         // Reset the buffer index for the next message
                                         data_index = 0;
                                         // break;
-                                    } else {
+                                    }
+                                    else if (temp_buf[i] != '\r')
+                                    {
                                         // Store the byte, ignoring carriage return '\r'
-                                        result[data_index++] = temp_buf[i];
+                                        if (data_index < sizeof(result) - 1)
+                                        {
+                                            result[data_index++] = temp_buf[i];
+                                        }
                                     }
                                 }
                                 if (exit_flag == true)
@@ -574,15 +582,14 @@ void parse(char *line)
                             }
                         }
 
-                            // memset(result, 0, sizeof(result));
-                        
+                        // memset(result, 0, sizeof(result));
                     }
                 }
                 else
                 {
-                    if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+                    if (xQueueReceive(uart_queue, (void *)&event, pdMS_TO_TICKS(500)))
                     {
-                        uart_read_bytes(UART_NUM_1, data_to_receive, event.size, portMAX_DELAY);
+                        uart_read_bytes(UART_NUM_1, data_to_receive, event.size, pdMS_TO_TICKS(500));
                         ESP_LOGI(TAG, "%s", data_to_receive);
                     }
                 }

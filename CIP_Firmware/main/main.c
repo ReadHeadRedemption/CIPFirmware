@@ -237,11 +237,17 @@ void moveMotor(void *pvParameters)
 void app_main(void)
 {
     ESP_LOGI(MAINTAG, "CIP Firmware starting...");
+
+    bootup = xSemaphoreCreateBinary();
+
+    xSemaphoreTake(bootup, portMAX_DELAY);
     gpio_set_direction(xStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(yStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(zStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(eStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(LED1, GPIO_MODE_OUTPUT);
+
+    
 
     // gpio_config_t outputPins = {
     //     .pin_bit_mask = (1ULL << xStep) | (1ULL << yStep) |
@@ -290,6 +296,8 @@ void app_main(void)
         .max_transfer_sz = 240 * 8 * sizeof(uint16_t),
     };
     ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
+
+    xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 2, NULL, 1);
 
     vTaskDelay(pdMS_TO_TICKS(100));
     if (init_io_expander() != ESP_OK)
@@ -382,45 +390,12 @@ void app_main(void)
     // Set UART pins (using -1 for pins you don't want to change)
     uart_set_pin(UART_NUM_1, PI_RX, PI_TX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
+    uart_set_rx_timeout(UART_NUM_1, 100);
+
     // Configure UART parameters
-    const int uart_buffer_size = (1024 * 2);
+    const int uart_buffer_size = (1024 * 4);
     uart_driver_install(UART_NUM_1, uart_buffer_size, uart_buffer_size, 10, &uart_queue, 0);
 
-    ESP_LOGI(MAINTAG, "GPIO pins configured successfully");
-
-    // ESP_ERROR_CHECK(gpio_config(&outputPins));
-
-    //////////////////////////////////////////////////////////////////////////
-    //
-    //                          TASK CREATION
-    //
-    /////////////////////////////////////////////////////////////////////////
-    // Initialize stepper motors
-    xTaskCreatePinnedToCore(console_task, "ConsoleTask", 4096, NULL, 5, NULL, 0);
-    // Create heater control task
-    xTaskCreatePinnedToCore(HeaterControl, "HeaterControl", 4096, NULL, 4, NULL, 0);
-    // Check temperature for display task
-    xTaskCreatePinnedToCore(TemperatureWatch, "TemperatureWatchTask", 4096, NULL, 1, NULL, 1);
-    // Create G-code parser task
-    xTaskCreatePinnedToCore(parserTask, "GCodeParser", 16384, NULL, 4, &parserHandle, 1);
-    // Display Task
-    xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 2, NULL, 1);
-    // Poll limit switches task
-    xTaskCreatePinnedToCore(checkSwitches, "poll limit switches", 4096, NULL, 2, NULL, 0);
-    // Test Tasks
-    // xTaskCreatePinnedToCore(moveMotor, "MoveMotor", 4096, NULL, 5, NULL, 1);
-    // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
-    // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
-    // xTaskCreatePinnedToCore(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL, 0);
-
-    ESP_LOGI(MAINTAG, "All tasks created successfully");
-
-    // char ready_signal[] = "PI_READY";
-    // char ack_ready_signal[] = "ESP_READY\n";
-    // bool exit_flag = false;
-
-    // char result[20];
-    // int data_index = 0;
     #ifdef DEBUG_UART
     char ready_signal[] = "PI_READY";
     char ack_ready_signal[] = "ESP_READY\n";
@@ -516,6 +491,43 @@ void app_main(void)
     }
     printf("EXITING MAIN");
     #endif
+
+    ESP_LOGI(MAINTAG, "GPIO pins configured successfully");
+
+    // ESP_ERROR_CHECK(gpio_config(&outputPins));
+
+    //////////////////////////////////////////////////////////////////////////
+    //
+    //                          TASK CREATION
+    //
+    /////////////////////////////////////////////////////////////////////////
+    // Initialize stepper motors
+    xTaskCreatePinnedToCore(console_task, "ConsoleTask", 4096, NULL, 5, NULL, 0);
+    // Create heater control task
+    xTaskCreatePinnedToCore(HeaterControl, "HeaterControl", 4096, NULL, 4, NULL, 0);
+    // Check temperature for display task
+    xTaskCreatePinnedToCore(TemperatureWatch, "TemperatureWatchTask", 4096, NULL, 1, NULL, 1);
+    // Create G-code parser task
+    xTaskCreatePinnedToCore(parserTask, "GCodeParser", 16384, NULL, 4, &parserHandle, 1);
+    // Display Task
+    // Poll limit switches task
+    xTaskCreatePinnedToCore(checkSwitches, "poll limit switches", 4096, NULL, 2, NULL, 0);
+    // Test Tasks
+    // xTaskCreatePinnedToCore(moveMotor, "MoveMotor", 4096, NULL, 5, NULL, 1);
+    // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
+    // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
+    // xTaskCreatePinnedToCore(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL, 0);
+
+    xSemaphoreGive(bootup);
+    ESP_LOGI(MAINTAG, "All tasks created successfully");
+
+    // char ready_signal[] = "PI_READY";
+    // char ack_ready_signal[] = "ESP_READY\n";
+    // bool exit_flag = false;
+
+    // char result[20];
+    // int data_index = 0;
+    
 //     while (1)
 //     {
 //         if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
