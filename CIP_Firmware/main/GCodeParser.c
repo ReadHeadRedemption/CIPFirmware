@@ -35,6 +35,355 @@ int current_head_id = 3;
 int eStepSize = 40;
 int purgeCount = 20;
 
+#define UART_PORT UART_NUM_1
+#define UART_PENDING_SIZE 1024
+
+static uint8_t uart_pending[UART_PENDING_SIZE];
+static size_t uart_pending_len = 0;
+
+
+/*
+ * Try to pull ONE COMPLETE message out of uart_pending.
+ *
+ * A complete message ends with:
+ *
+ *      '\n'
+ *
+ * or:
+ *
+ *      '\0'
+ *
+ * Returns true ONLY if a complete message was found.
+ */
+static bool uart_extract_complete_message(
+    char *output,
+    size_t output_size)
+{
+    if (output == NULL || output_size < 2)
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < uart_pending_len; i++)
+    {
+        if ((uart_pending[i] == '\n') ||
+            (uart_pending[i] == '\0'))
+        {
+            size_t output_index = 0;
+
+            /*
+             * Copy message into output.
+             *
+             * Ignore '\r' so both:
+             *
+             *     \n
+             *
+             * and:
+             *
+             *     \r\n
+             *
+             * work.
+             */
+            for (size_t j = 0; j < i; j++)
+            {
+                if (uart_pending[j] == '\r')
+                {
+                    continue;
+                }
+
+                if (output_index < output_size - 1)
+                {
+                    output[output_index++] =
+                        (char)uart_pending[j];
+                }
+            }
+
+            output[output_index] = '\0';
+
+            /*
+             * Remove this message from pending buffer.
+             *
+             * Anything AFTER the newline stays in the buffer
+             * for the next call.
+             */
+            size_t consumed = i + 1;
+
+            size_t remaining =
+                uart_pending_len - consumed;
+
+            if (remaining > 0)
+            {
+                memmove(
+                    uart_pending,
+                    &uart_pending[consumed],
+                    remaining
+                );
+            }
+
+            uart_pending_len = remaining;
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool uart_wait_for_complete_response(
+    char *response,
+    size_t response_size)
+{
+    uart_event_t event;
+
+    if (response == NULL || response_size < 2)
+    {
+        return false;
+    }
+
+    response[0] = '\0';
+
+    /*
+     * FIRST:
+     *
+     * See whether a complete message is already in our
+     * software receive buffer.
+     */
+    if (uart_extract_complete_message(
+            response,
+            response_size))
+    {
+        ESP_LOGI(
+            TAG,
+            "UART complete response: [%s]",
+            response
+        );
+
+        return true;
+    }
+
+
+    /*
+     * KEEP WAITING until an ACTUAL COMPLETE MESSAGE exists.
+     *
+     * xQueueReceive() returning DOES NOT cause this function
+     * to return.
+     */
+    while (1)
+    {
+        /*
+         * This deliberately blocks.
+         *
+         * The next command CANNOT be transmitted by this task
+         * until this function returns.
+         */
+        if (xQueueReceive(
+                uart_queue,
+                &event,
+                portMAX_DELAY) != pdTRUE)
+        {
+            continue;
+        }
+
+
+        /*
+         * We only care about received UART data here.
+         */
+        if (event.type == UART_DATA)
+        {
+            size_t bytes_remaining = event.size;
+
+            while (bytes_remaining > 0)
+            {
+                uint8_t temp[128];
+
+                size_t requested =
+                    bytes_remaining < sizeof(temp)
+                    ? bytes_remaining
+                    : sizeof(temp);
+
+                /*
+                 * Read only the amount associated with
+                 * this UART_DATA event.
+                 */
+                int length = uart_read_bytes(
+                    UART_PORT,
+                    temp,
+                    requested,
+                    portMAX_DELAY
+                );
+
+                if (length <= 0)
+                {
+                    break;
+                }
+
+                bytes_remaining -= length;
+
+
+                /*
+                 * Add received bytes to persistent software
+                 * buffer.
+                 */
+                for (int i = 0; i < length; i++)
+                {
+                    if (uart_pending_len <
+                        sizeof(uart_pending))
+                    {
+                        uart_pending[
+                            uart_pending_len++
+                        ] = temp[i];
+                    }
+                    else
+                    {
+                        ESP_LOGE(
+                            TAG,
+                            "UART pending buffer overflow"
+                        );
+
+                        uart_pending_len = 0;
+
+                        return false;
+                    }
+                }
+
+
+                /*
+                 * THIS IS THE CRITICAL PART.
+                 *
+                 * Do NOT return just because UART_DATA arrived.
+                 *
+                 * Return ONLY if '\n' or '\0' was actually
+                 * received and a COMPLETE response exists.
+                 */
+                if (uart_extract_complete_message(
+                        response,
+                        response_size))
+                {
+                    ESP_LOGI(
+                        TAG,
+                        "UART complete response: [%s]",
+                        response
+                    );
+
+                    return true;
+                }
+            }
+        }
+
+        else if (event.type == UART_FIFO_OVF)
+        {
+            ESP_LOGE(TAG, "UART FIFO overflow");
+
+            uart_flush_input(UART_PORT);
+            xQueueReset(uart_queue);
+
+            uart_pending_len = 0;
+
+            return false;
+        }
+
+        else if (event.type == UART_BUFFER_FULL)
+        {
+            ESP_LOGE(TAG, "UART buffer full");
+
+            uart_flush_input(UART_PORT);
+            xQueueReset(uart_queue);
+
+            uart_pending_len = 0;
+
+            return false;
+        }
+
+        else if (event.type == UART_PARITY_ERR)
+        {
+            ESP_LOGE(TAG, "UART parity error");
+        }
+
+        else if (event.type == UART_FRAME_ERR)
+        {
+            ESP_LOGE(TAG, "UART frame error");
+        }
+
+        /*
+         * Notice:
+         *
+         * WE DO NOT RETURN HERE.
+         *
+         * Go right back to xQueueReceive() and keep waiting.
+         */
+    }
+}
+
+static bool uart_send_and_wait(
+    const char *command,
+    char *response,
+    size_t response_size)
+{
+    if (command == NULL)
+    {
+        return false;
+    }
+
+    ESP_LOGI(
+        TAG,
+        "TX >>> [%s]",
+        command
+    );
+
+
+    /*
+     * SEND ONE COMMAND
+     */
+    int written = uart_write_bytes(
+        UART_NUM_1,
+        command,
+        strlen(command)
+    );
+
+    if (written < 0)
+    {
+        ESP_LOGE(
+            TAG,
+            "UART transmit failed"
+        );
+
+        return false;
+    }
+
+
+    /*
+     * STOP HERE.
+     *
+     * Nothing after this point happens until the Pi sends
+     * one COMPLETE response.
+     */
+    ESP_LOGI(
+        TAG,
+        "Waiting for Pi response..."
+    );
+
+    if (!uart_wait_for_complete_response(
+            response,
+            response_size))
+    {
+        ESP_LOGE(
+            TAG,
+            "Failed waiting for Pi response"
+        );
+
+        return false;
+    }
+
+
+    ESP_LOGI(
+        TAG,
+        "RX <<< [%s]",
+        response
+    );
+
+    return true;
+}
+
 void parsetoolparam(int tool)
 {
     // cond3 sp cam
@@ -477,127 +826,220 @@ void parse(char *line)
         }
         else if (strcmp(cmd, "M118") == 0 || strcmp(cmd, "M240") == 0)
         {
-            char data_to_receive[100];
+            char response[400];
 
-            printf(line + 5);
-            int bytes_written = 0;
+            const char *command = line + 5;
+
+
+            /* ============================================================
+            * M240
+            * ============================================================ */
             if (strcmp(cmd, "M240") == 0)
             {
-                printf("HERE!!");
-                char capture[] = "CAPTURE\n";
-                bytes_written = uart_write_bytes(UART_NUM_1, capture, strlen(capture));
-                if (xQueueReceive(uart_queue, (void *)&event, portMAX_DELAY))
+                memset(response, 0, sizeof(response));
+
+                /*
+                * SEND:
+                *
+                *      CAPTURE\n
+                *
+                * Then STOP and wait for the Pi.
+                */
+                if (!uart_send_and_wait(
+                        "CAPTURE\n",
+                        response,
+                        sizeof(response)))
                 {
-                    uart_read_bytes(UART_NUM_1, data_to_receive, event.size, portMAX_DELAY);
-                    ESP_LOGI(TAG, "%s", data_to_receive);
+                    ESP_LOGE(
+                        TAG,
+                        "CAPTURE communication failed"
+                    );
                 }
             }
-            else
+
+
+            /* ============================================================
+            * END_LAYER
+            * ============================================================ */
+            else if (strstr(line, "END_LAYER") != NULL)
             {
-                printf(line + 5);
-                bytes_written = uart_write_bytes(UART_NUM_1, line + 5, strlen(line + 5));
-                // bytes_written = uart_write_bytes(UART_NUM_1, "\n", 1);
+                /*
+                * First transmit END_LAYER.
+                */
+                ESP_LOGI(
+                    TAG,
+                    "TX >>> [%s]",
+                    command
+                );
 
-                char end_layer[] = "END_LAYER";
-                char end_result_transmit[] = "END_RESULT_TRANSMIT";
-                char ack[] = "acknowledged\n";
-                bool exit_flag = false;
+                int written = uart_write_bytes(
+                    UART_NUM_1,
+                    command,
+                    strlen(command)
+                );
 
-                if (strstr(line, end_layer) != NULL)
+                if (written < 0)
                 {
-                    char result[400];
-                    int data_index = 0;
-                    while (1)
-                    {
-                        // if (xQueueReceive(uart_queue, (void *)&event, pdMS_TO_TICKS(500)))
-                        // {
-                        //     uart_read_bytes(UART_NUM_1, data_to_receive, event.size, pdMS_TO_TICKS(500));
-                        //     ESP_LOGI(TAG, "%s", data_to_receive);
-
-                        //     if (strstr(data_to_receive, end_result_transmit) != NULL)
-                        //     {
-                        //         break;
-                        //     }
-
-                        //     printf(data_to_receive);
-                        // if (xQueueReceive(uart_queue, (void *)&event, pdMS_TO_TICKS(500)))
-                        // {
-                        //     // ESP_LOGI(TAG, "%s", result);
-                        //     // printf("\n");
-
-                        //     if (event.type ==UART_PATTERN_DET)
-                        //     {
-                        //         int pos = uart_pattern_pop_pos(UART_NUM_1);
-                        //         if (pos != -1) {
-                        //             int read_len = uart_read_bytes(UART_NUM_1, result, event.size, pdMS_TO_TICKS(500));
-                        //             result[read_len] = '\0'; // Null-terminate the string
-                        //             printf("Received line: %s", result);
-                        //         }
-                        //     }
-                        //     // printf(result);
-                        //     // printf("\n");
-                        //    printf(line + 5);
-                        //    bytes_written = uart_write_bytes(UART_NUM_1, data_to_receive, strlen(data_to_receive));
-                        //     // printf(line + 5);
-                        //     bytes_written = uart_write_bytes(UART_NUM_1, ack, strlen(ack));
-                        // }
-                        if (xQueueReceive(uart_queue, (void *)&event, portMAX_DELAY))
-                        {
-                            if (event.type == UART_DATA)
-                            {
-                                uint8_t temp_buf[400];
-                                int length = uart_read_bytes(UART_NUM_1, temp_buf, sizeof(temp_buf), portMAX_DELAY);
-                                for (int i = 0; i < length; i++)
-                                {
-                                    if (temp_buf[i] == '\n')
-                                    {
-                                        // Null-terminate the string when newline is found
-                                        result[data_index] = '\0';
-                                        ESP_LOGI(TAG, "Received line: %s", (char *)result);
-                                        if (strstr((char *)result, end_result_transmit) != NULL)
-                                        {
-                                            printf("EXITING HERE");
-                                            exit_flag = true;
-                                            break;
-                                        }
-                                        // Reset the buffer index for the next message
-                                        data_index = 0;
-                                        // break;
-                                    }
-                                    else if (temp_buf[i] != '\r')
-                                    {
-                                        // Store the byte, ignoring carriage return '\r'
-                                        if (data_index < sizeof(result) - 1)
-                                        {
-                                            result[data_index++] = temp_buf[i];
-                                        }
-                                    }
-                                }
-                                if (exit_flag == true)
-                                {
-                                    printf("EXITING HERE TRULY");
-                                    break;
-                                }
-                                bytes_written = uart_write_bytes(UART_NUM_1, ack, strlen(ack));
-                            }
-                        }
-
-                        // memset(result, 0, sizeof(result));
-                    }
+                    ESP_LOGE(
+                        TAG,
+                        "Failed sending END_LAYER"
+                    );
                 }
                 else
                 {
-                    if (xQueueReceive(uart_queue, (void *)&event, pdMS_TO_TICKS(500)))
+                    /*
+                    * Pi will now send multiple results.
+                    *
+                    * ESP32 waits for ONE COMPLETE result.
+                    *
+                    * Then:
+                    *
+                    *      errorCallback()
+                    *
+                    * Then:
+                    *
+                    *      acknowledged\n
+                    *
+                    * Then wait for NEXT result.
+                    */
+                    while (1)
                     {
-                        uart_read_bytes(UART_NUM_1, data_to_receive, event.size, pdMS_TO_TICKS(500));
-                        ESP_LOGI(TAG, "%s", data_to_receive);
+                        memset(
+                            response,
+                            0,
+                            sizeof(response)
+                        );
+
+                        ESP_LOGI(
+                            TAG,
+                            "Waiting for END_LAYER result..."
+                        );
+
+
+                        /*
+                        * BLOCK HERE UNTIL THE PI SENDS
+                        * ONE COMPLETE MESSAGE.
+                        */
+                        if (!uart_wait_for_complete_response(
+                                response,
+                                sizeof(response)))
+                        {
+                            ESP_LOGE(
+                                TAG,
+                                "END_LAYER receive failed"
+                            );
+
+                            break;
+                        }
+
+
+                        ESP_LOGI(
+                            TAG,
+                            "END_LAYER RX <<< [%s]",
+                            response
+                        );
+
+
+                        /*
+                        * Check final marker FIRST.
+                        */
+                        if (strstr(
+                                response,
+                                "END_RESULT_TRANSMIT")
+                            != NULL)
+                        {
+                            ESP_LOGI(
+                                TAG,
+                                "END_RESULT_TRANSMIT received"
+                            );
+
+                            uart_flush_input(UART_NUM_1);
+                            xQueueReset(uart_queue);
+
+                            break;
+                        }
+
+
+                        /*
+                        * Process the received result.
+                        */
+                        // if (errorCallback != NULL)
+                        // {
+                        //     errorCallback(response);
+                        // }
+
+
+                        /*
+                        * ONLY NOW acknowledge the result.
+                        */
+                        const char ack[] =
+                            "acknowledged\n";
+
+                        ESP_LOGI(
+                            TAG,
+                            "TX >>> [acknowledged]"
+                        );
+
+                        uart_write_bytes(
+                            UART_NUM_1,
+                            ack,
+                            strlen(ack)
+                        );
+
+
+                        /*
+                        * Loop returns immediately to:
+                        *
+                        * uart_wait_for_complete_response()
+                        *
+                        * Therefore we cannot send another ACK until
+                        * another COMPLETE Pi message is received.
+                        */
                     }
                 }
             }
-            // int bytes_written = uart_write_bytes(UART_PORT_NUM, data, strlen(data));
 
-            printf("%d", bytes_written);
-            printf("HELOO");
+
+            /* ============================================================
+            * NORMAL COMMAND
+            * ============================================================ */
+            else
+            {
+                memset(response, 0, sizeof(response));
+
+                /*
+                * THIS IS THE NORMAL HANDSHAKE:
+                *
+                *     ESP32 sends command
+                *
+                *             ↓
+                *
+                *     ESP32 STOPS HERE
+                *
+                *             ↓
+                *
+                *     Pi sends complete response
+                *
+                *             ↓
+                *
+                *     function returns
+                *
+                *             ↓
+                *
+                *     outer loop may send next command
+                */
+                if (!uart_send_and_wait(
+                        command,
+                        response,
+                        sizeof(response)))
+                {
+                    ESP_LOGE(
+                        TAG,
+                        "UART command failed: [%s]",
+                        command
+                    );
+                }
+            }
         }
         else if (strcmp(cmd, "M140") == 0)
         {

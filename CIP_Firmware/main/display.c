@@ -1235,7 +1235,7 @@ void display_task(void *pvParameters)
     lv_scr_load(loadingScreen);
     lvgl_port_unlock();
     // vTaskDelay(pdMS_TO_TICKS(7000)); // Show loading screen for 2 seconds
-    if (semaphoreTake(bootup, portMAX_DELAY) == pdTRUE)
+    if (xSemaphoreTake(bootup, portMAX_DELAY) == pdTRUE)
     {
         if (!lvgl_port_lock(-1))
             return;

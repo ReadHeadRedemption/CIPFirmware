@@ -492,9 +492,8 @@ void app_main(void)
     printf("EXITING MAIN");
     #endif
 
-    ESP_LOGI(MAINTAG, "GPIO pins configured successfully");
-
-    // ESP_ERROR_CHECK(gpio_config(&outputPins));
+    uart_flush_input(UART_NUM_1);
+    xQueueReset(uart_queue);
 
     //////////////////////////////////////////////////////////////////////////
     //
