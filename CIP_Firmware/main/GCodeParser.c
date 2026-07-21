@@ -433,8 +433,8 @@ void readParseFile(char *fileLocation)
         {
             if (xSemaphoreTake(parseSemaphore, portMAX_DELAY) == pdTRUE)
             {
-                readLines++;
                 parse(line);
+                readLines++;
                 // vTaskDelay(pdMS_TO_TICKS(5000));
                 if (lineCountCb != NULL)
                 {
@@ -1006,6 +1006,13 @@ void parse(char *line)
             else
             {
                 memset(response, 0, sizeof(response));
+
+                if (strstr(line, "START_LAYER") != NULL)
+                {
+                    ESP_LOGI(TAG, "START_LAYER DETECTED AND RESETTING UART BUFFER");
+                    uart_flush_input(UART_NUM_1);
+                    xQueueReset(uart_queue);
+                }
 
                 /*
                 * THIS IS THE NORMAL HANDSHAKE:

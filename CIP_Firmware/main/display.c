@@ -184,7 +184,7 @@ void onLineCountChanged(int readLines, int totalLines)
 {
     // printf("Line Count Changed: %d / %d\n", readLines, totalLines);
 
-    if ((readLines > totalLines && totalLines > 0))
+    if ((readLines >= totalLines && totalLines > 0))
     {
         show_print_finished_screen();
 
@@ -198,7 +198,7 @@ void onLineCountChanged(int readLines, int totalLines)
 
         if (layer_info_label != NULL)
         {
-            lv_label_set_text_fmt(layer_info_label, "Current Step: %d / %d", readLines, totalLines);
+            lv_label_set_text_fmt(layer_info_label, "Finished Step: %d / %d", readLines, totalLines);
         }
 
         lvgl_port_unlock();
@@ -284,7 +284,7 @@ void show_active_print_screen(const char *filename)
     layer_info_label = lv_label_create(activePrintScreen);
     lv_obj_set_width(layer_info_label, 220);
     lv_obj_set_style_text_align(layer_info_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_text_fmt(layer_info_label, "Current Step: ---");
+    lv_label_set_text_fmt(layer_info_label, "Finished Step: ---");
     lv_obj_align(layer_info_label, LV_ALIGN_TOP_MID, 0, 160);
 
     temp_info_label = lv_label_create(activePrintScreen);
@@ -1234,14 +1234,11 @@ void display_task(void *pvParameters)
         return;
     lv_scr_load(loadingScreen);
     lvgl_port_unlock();
-    // vTaskDelay(pdMS_TO_TICKS(7000)); // Show loading screen for 2 seconds
-    if (xSemaphoreTake(bootup, portMAX_DELAY) == pdTRUE)
-    {
+    vTaskDelay(pdMS_TO_TICKS(2000)); // Show loading screen for 2 seconds
         if (!lvgl_port_lock(-1))
             return;
         lv_scr_load(g_main_screen);
         lvgl_port_unlock();
-    }
     // 4. Stay alive
     while (1)
     {

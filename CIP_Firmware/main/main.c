@@ -46,6 +46,7 @@ void parserTask(void *pvParameters)
 {
     BaseType_t recieveFlag;
     char fileString[128];
+    parse("G28");
     while (1)
     {
         // printf("hi");
@@ -238,15 +239,11 @@ void app_main(void)
 {
     ESP_LOGI(MAINTAG, "CIP Firmware starting...");
 
-    bootup = xSemaphoreCreateBinary();
-
     gpio_set_direction(xStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(yStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(zStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(eStep, GPIO_MODE_OUTPUT);
     gpio_set_direction(LED1, GPIO_MODE_OUTPUT);
-
-    
 
     // gpio_config_t outputPins = {
     //     .pin_bit_mask = (1ULL << xStep) | (1ULL << yStep) |
@@ -296,7 +293,7 @@ void app_main(void)
     };
     ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
-    xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 2, NULL, 1);
+    xTaskCreatePinnedToCore(display_task, "display_tsk", 8192, NULL, 2, NULL, 0);
 
     vTaskDelay(pdMS_TO_TICKS(100));
     if (init_io_expander() != ESP_OK)
@@ -395,7 +392,7 @@ void app_main(void)
     const int uart_buffer_size = (1024 * 4);
     uart_driver_install(UART_NUM_1, uart_buffer_size, uart_buffer_size, 10, &uart_queue, 0);
 
-    #ifdef DEBUG_UART
+#ifdef DEBUG_UART
     char ready_signal[] = "PI_READY";
     char ack_ready_signal[] = "ESP_READY\n";
 
@@ -415,24 +412,23 @@ void app_main(void)
                     UART_NUM_1,
                     temp_buf,
                     sizeof(temp_buf),
-                    pdMS_TO_TICKS(100)
-                );
+                    pdMS_TO_TICKS(100));
 
                 for (int i = 0; i < length; i++)
                 {
                     char c = (char)temp_buf[i];
 
                     /*
-                    * Ignore carriage return
-                    */
+                     * Ignore carriage return
+                     */
                     if (c == '\r')
                     {
                         continue;
                     }
 
                     /*
-                    * Complete message received
-                    */
+                     * Complete message received
+                     */
                     if (c == '\n')
                     {
                         result[data_index] = '\0';
@@ -447,8 +443,7 @@ void app_main(void)
                             uart_write_bytes(
                                 UART_NUM_1,
                                 ack_ready_signal,
-                                strlen(ack_ready_signal)
-                            );
+                                strlen(ack_ready_signal));
 
                             exit_flag = true;
 
@@ -456,16 +451,16 @@ void app_main(void)
                         }
 
                         /*
-                        * Not PI_READY, so reset for next message
-                        */
+                         * Not PI_READY, so reset for next message
+                         */
                         data_index = 0;
                         result[0] = '\0';
                     }
                     else
                     {
                         /*
-                        * Make sure we don't overflow result[]
-                        */
+                         * Make sure we don't overflow result[]
+                         */
                         if (data_index < sizeof(result) - 1)
                         {
                             result[data_index++] = c;
@@ -479,7 +474,6 @@ void app_main(void)
                         }
                     }
                 }
-                
 
                 if (exit_flag)
                 {
@@ -489,7 +483,7 @@ void app_main(void)
         }
     }
     printf("EXITING MAIN");
-    #endif
+#endif
 
     uart_flush_input(UART_NUM_1);
     xQueueReset(uart_queue);
@@ -500,23 +494,21 @@ void app_main(void)
     //
     /////////////////////////////////////////////////////////////////////////
     // Initialize stepper motors
-    xTaskCreatePinnedToCore(console_task, "ConsoleTask", 4096, NULL, 5, NULL, 0);
+    xTaskCreatePinnedToCore(console_task, "ConsoleTask", 8192, NULL, 5, NULL, 1);
     // Create heater control task
-    xTaskCreatePinnedToCore(HeaterControl, "HeaterControl", 4096, NULL, 4, NULL, 0);
+    xTaskCreatePinnedToCore(HeaterControl, "HeaterControl", 8192, NULL, 4, NULL, 1);
     // Check temperature for display task
-    xTaskCreatePinnedToCore(TemperatureWatch, "TemperatureWatchTask", 4096, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(TemperatureWatch, "TemperatureWatchTask", 8192, NULL, 1, NULL, 1);
     // Create G-code parser task
-    xTaskCreatePinnedToCore(parserTask, "GCodeParser", 16384, NULL, 4, &parserHandle, 1);
+    xTaskCreatePinnedToCore(parserTask, "GCodeParser", 16384, NULL, 4, &parserHandle, 0);
     // Display Task
     // Poll limit switches task
-    xTaskCreatePinnedToCore(checkSwitches, "poll limit switches", 4096, NULL, 2, NULL, 0);
+    xTaskCreatePinnedToCore(checkSwitches, "poll limit switches", 8192, NULL, 2, NULL, 0);
     // Test Tasks
     // xTaskCreatePinnedToCore(moveMotor, "MoveMotor", 4096, NULL, 5, NULL, 1);
     // xTaskCreate(buttonTest, "Testing button inputs", 2048, NULL, 2, NULL);
     // xTaskCreate(printExpanderState, "print expander state", 4096, NULL, 2, NULL);
     // xTaskCreatePinnedToCore(blinker, "Blinks LED Heartbeat", 2048, NULL, 1, NULL, 0);
-
-    xSemaphoreGive(bootup);
     ESP_LOGI(MAINTAG, "All tasks created successfully");
 
     // char ready_signal[] = "PI_READY";
@@ -525,46 +517,46 @@ void app_main(void)
 
     // char result[20];
     // int data_index = 0;
-    
-//     while (1)
-//     {
-//         if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
-//         {
-//             if (event.type == UART_DATA)
-//             {
-//                 uint8_t temp_buf[20];
-//                 int length = uart_read_bytes(UART_NUM_1, temp_buf, sizeof(temp_buf), 100 / portTICK_PERIOD_MS);
-//                 for (int i = 0; i < length; i++)
-//                 {
-//                     if (temp_buf[i] == '\n')
-//                     {
-//                         // Null-terminate the string when newline is found
-//                         result[data_index] = '\0';
-//                         ESP_LOGI(MAINTAG, "Received line: %s", (char *)result);
-//                         printf("\n");
-//                         if (strstr((char *)result, ready_signal) != NULL)
-//                         {
-//                             printf("PI MAY BE READY\n");
-//                             uart_write_bytes(UART_NUM_1, ack_ready_signal, strlen(ack_ready_signal));
-//                             exit_flag = true;
-//                             break;
-//                         }
-//                         // Reset the buffer index for the next message
-//                         data_index = 0;
-//                         // break;
-//                     }
-//                     else
-//                     {
-//                         // Store the byte, ignoring carriage return '\r'
-//                         result[data_index++] = temp_buf[i];
-//                     }
-//                 }
-//                 if (exit_flag == true)
-//                 {
-//                     printf("PI IS READY");
-//                     break;
-//                 }
-//             }
-//         }
-//     }
+
+    //     while (1)
+    //     {
+    //         if (xQueueReceive(uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+    //         {
+    //             if (event.type == UART_DATA)
+    //             {
+    //                 uint8_t temp_buf[20];
+    //                 int length = uart_read_bytes(UART_NUM_1, temp_buf, sizeof(temp_buf), 100 / portTICK_PERIOD_MS);
+    //                 for (int i = 0; i < length; i++)
+    //                 {
+    //                     if (temp_buf[i] == '\n')
+    //                     {
+    //                         // Null-terminate the string when newline is found
+    //                         result[data_index] = '\0';
+    //                         ESP_LOGI(MAINTAG, "Received line: %s", (char *)result);
+    //                         printf("\n");
+    //                         if (strstr((char *)result, ready_signal) != NULL)
+    //                         {
+    //                             printf("PI MAY BE READY\n");
+    //                             uart_write_bytes(UART_NUM_1, ack_ready_signal, strlen(ack_ready_signal));
+    //                             exit_flag = true;
+    //                             break;
+    //                         }
+    //                         // Reset the buffer index for the next message
+    //                         data_index = 0;
+    //                         // break;
+    //                     }
+    //                     else
+    //                     {
+    //                         // Store the byte, ignoring carriage return '\r'
+    //                         result[data_index++] = temp_buf[i];
+    //                     }
+    //                 }
+    //                 if (exit_flag == true)
+    //                 {
+    //                     printf("PI IS READY");
+    //                     break;
+    //                 }
+    //             }
+    //         }
+    //     }
 }
