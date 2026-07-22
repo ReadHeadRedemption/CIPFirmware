@@ -42,19 +42,44 @@ static void home_screen_cb(lv_event_t *e)
 ///////////////////////////////////////////////////////////////////////////
 lv_obj_t *reflow_temp = NULL;
 
-static void reflow_parts_cb(lv_event_t *e)
+// 1. Create a dedicated task for the reflow sequence
+static void reflow_sequence_task(void *pvParameters)
 {
-    vTaskSuspend(parserHandle); // Stop the parser task to prevent any new commands from being processed during reflow
     printf("Reflowing parts...\n");
+    
     parse("G1 E-400 F200"); // large pull out to stop ink extrusion
     parse("G0 X0 Y-20 Z150");
     parse("M84");
     parse("M190 S140");
-    parse("G4 S45"); // Sleep for a while, seconds
+    parse("G4 S45");        // Sleep for a while, seconds
     parse("M190 S190");
-    parse("G4 S30"); // Sleep for a while, seconds
+    parse("G4 S30");        // Sleep for a while, seconds
     parse("M190 S0");
-    parse("G4 S1800"); // cool-down wait 30 min
+    parse("G4 S1800");      // cool-down wait 30 min
+
+    printf("Reflow complete.\n");
+
+    // Delete this task when finished
+    vTaskDelete(NULL);
+}
+
+// 2. Update your button callback to spawn the task instead of blocking
+static void reflow_parts_cb(lv_event_t *e)
+{
+    // Stop the parser task to prevent interference
+    vTaskSuspend(parserHandle); 
+
+    // Create the reflow task so the GUI thread can return immediately
+    // Stack size 4096 is usually safe, adjust if your parse() needs more
+    xTaskCreatePinnedToCore(
+        reflow_sequence_task, 
+        "reflow_task", 
+        8192,         // Increased Stack Size
+        NULL, 
+        2, 
+        NULL, 
+        1             // Pin strictly to Core 1
+    );
 }
 
 void reflowTempChange(float temp)
